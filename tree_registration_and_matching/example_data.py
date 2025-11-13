@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import pyproj
 from shapely.geometry import box
+import shapely
 
 
 def drop_understory_trees(
@@ -184,3 +185,27 @@ def simulate_tree_maps(
     )
 
     return {"pred": pred_points, "obs": obs_points, "obs_bounds": obs_bounds}
+
+
+def create_tree_crowns_from_tops(tree_tops, radius_factor=0.1):
+    tree_circles = tree_tops.buffer(tree_tops["height"] * radius_factor)
+    # Unfortunately these are not sorted in the same order as the input points
+    tree_points_voronoi = gpd.GeoDataFrame(
+        geometry=tree_tops.geometry.voronoi_polygons(), crs=tree_tops.crs
+    )
+
+    ordered_voronoi = tree_tops.sjoin(
+        tree_points_voronoi, predicate="within", how="right"
+    )
+    ordered_voronoi.set_index("index_left", inplace=True, drop=True)
+
+    # Align the Voronoi polygons with the tree tops by index to ensure the corresponding one is
+    # used for each tree
+    intersecting_region = ordered_voronoi.intersection(tree_circles, align=True)
+
+    tree_crowns = gpd.GeoDataFrame(
+        data={"tree_top_id": tree_tops.index},
+        geometry=intersecting_region,
+        crs=tree_tops.crs,
+    )
+    return tree_crowns
