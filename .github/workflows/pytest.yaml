@@ -25,7 +25,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          poetry install
+          poetry install --with dev
+
 
       - name: Print Python path info
         run: |
