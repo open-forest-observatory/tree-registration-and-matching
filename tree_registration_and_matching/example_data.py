@@ -2,6 +2,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 from shapely.geometry import box
+import pyproj
 
 
 def drop_understory_trees(
@@ -37,6 +38,7 @@ def simulate_tree_maps(
     shift_x: float = 0.0,
     shift_y: float = 0.0,
     random_seed: int = None,
+    CRS: pyproj.CRS = 3310,
 ) -> dict:
     """
     Create simulated "predicted" and "observed" tree maps with customizable clustering,
@@ -45,6 +47,10 @@ def simulate_tree_maps(
     Generate random, customizably clustered points in x-y space over an area wider than
     would reasonably have a field stem map (to represent drone-based tree predictions).
     The x-y coordinates are interpreted as meters.
+
+    Ported from R code here:
+    https://github.com/open-forest-observatory/ofo-r/blob/3e3d138ffd99539affb7158979d06fc535bc1066/R/tree-map-alignment.R#L13
+    with AI assist.
 
     Parameters:
         trees_per_ha (float): Tree density in trees per hectare. Default: 250
@@ -61,11 +67,12 @@ def simulate_tree_maps(
         shift_x (float): Horizontal shift applied to observed map in meters. Default: 0.0
         shift_y (float): Vertical shift applied to observed map in meters. Default: 0.0
         random_seed (int): Random seed for reproducibility. Default: None
+        CRS (pyproj.CRS): Coordinate Reference System for output GeoDataFrames. Default: EPSG:3310
 
     Returns:
         dict: Dictionary with keys:
-            - 'pred': DataFrame of predicted trees with columns 'x', 'y', 'z'
-            - 'obs': DataFrame of observed trees with columns 'x', 'y', 'z'
+            - 'pred': gpd.GeoDataFrame of predicted trees with point geometries and 'height' attribute
+            - 'obs': gpd.GeoDataFrame of observed trees with point geometries and 'height' attribute
             - 'obs_bounds': GeoDataFrame with bounding box geometry of observed trees
     """
     if random_seed is not None:
@@ -160,11 +167,20 @@ def simulate_tree_maps(
     obs["x"] = obs["x"] + shift_x
     obs["y"] = obs["y"] + shift_y
 
+    # Convert to GeoDataFrames representing each tree as a point
+    obs_points = gpd.GeoDataFrame(
+        {"height": obs["z"]}, geometry=gpd.points_from_xy(obs["x"], obs["y"]), crs=CRS
+    )
+    pred_points = gpd.GeoDataFrame(
+        {"height": pred["z"]},
+        geometry=gpd.points_from_xy(pred["x"], pred["y"]),
+        crs=CRS,
+    )
+
     # Compute bounds of observed tree map
-    obs_sf = gpd.GeoDataFrame(obs, geometry=gpd.points_from_xy(obs["x"], obs["y"]))
-    obs_bbox = obs_sf.total_bounds  # [minx, miny, maxx, maxy]
+    obs_bbox = obs_points.total_bounds  # [minx, miny, maxx, maxy]
     obs_bounds = gpd.GeoDataFrame(
         geometry=[box(obs_bbox[0], obs_bbox[1], obs_bbox[2], obs_bbox[3])], crs=None
     )
 
-    return {"pred": pred, "obs": obs, "obs_bounds": obs_bounds}
+    return {"pred": pred_points, "obs": obs_points, "obs_bounds": obs_bounds}
