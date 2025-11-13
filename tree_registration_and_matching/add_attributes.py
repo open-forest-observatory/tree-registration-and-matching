@@ -1,8 +1,9 @@
-import numpy as np
 import geopandas as gpd
+import numpy as np
 
+from tree_registration_and_matching.register_MEE import \
+    match_trees_singlestratum
 from tree_registration_and_matching.utils import ensure_projected_CRS
-from tree_registration_and_matching.register_MEE import match_trees_singlestratum
 
 
 def match_field_and_drone_trees(
