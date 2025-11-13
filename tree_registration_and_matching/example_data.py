@@ -1,8 +1,8 @@
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-from shapely.geometry import box
 import pyproj
+from shapely.geometry import box
 
 
 def drop_understory_trees(

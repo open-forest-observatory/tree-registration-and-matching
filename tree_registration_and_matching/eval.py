@@ -1,10 +1,10 @@
+import geopandas as gpd
+import matplotlib.collections as mc
+import matplotlib.pyplot as plt
 import numpy as np
 import shapely
-from tree_registration_and_matching.utils import cdist
 
-import matplotlib.pyplot as plt
-import matplotlib.collections as mc
-import geopandas as gpd
+from tree_registration_and_matching.utils import cdist
 
 
 def match_trees_singlestratum(
