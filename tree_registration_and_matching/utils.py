@@ -1,6 +1,6 @@
 import geopandas as gpd
-import pyproj
 import numpy as np
+import pyproj
 
 from tree_registration_and_matching.constants import LAT_LON_CRS
 

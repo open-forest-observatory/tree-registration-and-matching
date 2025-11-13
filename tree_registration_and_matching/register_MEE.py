@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from shapely.affinity import translate
 
-from tree_registration_and_matching.utils import ensure_projected_CRS
 from tree_registration_and_matching.eval import obj_mee_matching
+from tree_registration_and_matching.utils import ensure_projected_CRS
 
 
 def find_best_shift(
