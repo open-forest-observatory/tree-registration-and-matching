@@ -180,7 +180,7 @@ def simulate_tree_maps(
     # Compute bounds of observed tree map
     obs_bbox = obs_points.total_bounds  # [minx, miny, maxx, maxy]
     obs_bounds = gpd.GeoDataFrame(
-        geometry=[box(obs_bbox[0], obs_bbox[1], obs_bbox[2], obs_bbox[3])], crs=None
+        geometry=[box(obs_bbox[0], obs_bbox[1], obs_bbox[2], obs_bbox[3])], crs=CRS
     )
 
     return {"pred": pred_points, "obs": obs_points, "obs_bounds": obs_bounds}
