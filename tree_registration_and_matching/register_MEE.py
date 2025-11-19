@@ -119,7 +119,7 @@ def align_plot(field_trees, drone_trees, obs_bounds, height_column="height", vis
         objective_function=obj_mee_matching,
         search_increment=1,
         search_window=10,
-        vis=True,
+        vis=vis,
     )
     # This is initialized from the coarse shift
     fine_shift = find_best_shift(
