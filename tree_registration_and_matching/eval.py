@@ -112,6 +112,7 @@ def obj_mee_matching(
     min_height: float = 10,
     edge_buffer: float = 5,
     height_column: str = "height",
+    return_prec_recall: bool = False,
 ) -> float:
     """
     Compute the F1 score for how many trees matched.
@@ -183,5 +184,7 @@ def obj_mee_matching(
         if (precision + recall) > 0
         else 0
     )
+    if return_prec_recall:
+        return precision, recall, f1
 
     return f1

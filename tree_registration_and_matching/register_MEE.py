@@ -15,6 +15,7 @@ def find_best_shift(
     drone_trees: gpd.GeoDataFrame,
     obs_bounds: gpd.GeoDataFrame,
     objective_function: typing.Callable,
+    objective_function_kwargs: dict = {},
     search_window: float = 50,
     search_increment: float = 2,
     base_shift: typing.Tuple[float] = (0, 0),
@@ -36,6 +37,8 @@ def find_best_shift(
         objective_function (function):
             A function that takes the drone trees and shifted field trees and computes a score.
             Higher scores imply better alignment.
+        objective_function_kwargs (dict, optional):
+            Additional keyword arguments to pass to the objective function. Defaults to {}.
         search_window (float, optional):
             Distance in meters to perform grid search. Defaults to 50.
         search_increment (float, optional):
@@ -84,7 +87,12 @@ def find_best_shift(
 
         # Compute the quality of this shift
         objective_values.append(
-            objective_function(shifted_field_trees, drone_trees, shifted_obs_bounds)
+            objective_function(
+                shifted_field_trees,
+                drone_trees,
+                shifted_obs_bounds,
+                **objective_function_kwargs,
+            )
         )
 
     if vis:
@@ -117,6 +125,7 @@ def align_plot(field_trees, drone_trees, obs_bounds, height_column="height", vis
         drone_trees=drone_trees,
         obs_bounds=obs_bounds,
         objective_function=obj_mee_matching,
+        objective_function_kwargs={"height_column": height_column},
         search_increment=1,
         search_window=10,
         vis=vis,
@@ -127,6 +136,7 @@ def align_plot(field_trees, drone_trees, obs_bounds, height_column="height", vis
         drone_trees=drone_trees,
         obs_bounds=obs_bounds,
         objective_function=obj_mee_matching,
+        objective_function_kwargs={"height_column": height_column},
         search_window=2,
         search_increment=0.2,
         base_shift=coarse_shift,
@@ -140,15 +150,17 @@ def align_plot(field_trees, drone_trees, obs_bounds, height_column="height", vis
         lambda x: translate(x, xoff=fine_shift[0], yoff=fine_shift[1])
     )
 
-    # Convert back to the original CRS
-    shifted_field_trees.to_crs(original_field_CRS, inplace=True)
-
     if vis:
         # Plot the aligned data
-        f, ax = plt.subplots()
-        shifted_field_trees.plot(ax=ax)
-        drone_trees.plot(ax=ax)
+        _, ax = plt.subplots()
+
+        # By chance, the size works nicely visually without any rescaling
+        shifted_field_trees.plot(ax=ax, markersize=shifted_field_trees[height_column])
+        drone_trees.plot(ax=ax, markersize=drone_trees[height_column])
         plt.show()
+
+    # Convert back to the original CRS
+    shifted_field_trees.to_crs(original_field_CRS, inplace=True)
 
     return shifted_field_trees, fine_shift
 
