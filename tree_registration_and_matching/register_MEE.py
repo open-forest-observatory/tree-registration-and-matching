@@ -20,6 +20,7 @@ def find_best_shift(
     search_increment: float = 2,
     base_shift: typing.Tuple[float] = (0, 0),
     vis: bool = False,
+    return_quality_metrics: bool = False,
 ) -> np.array:
     """
     Compute the shift for the observed trees that minimizes the mean distance between observed trees
@@ -50,11 +51,19 @@ def find_best_shift(
         vis (bool, optional):
             Visualize a scatter plot of the mean closest distance to drone trees for each shift.
             Defaults to False.
+        return_quality_metrics (bool, optional):
+            Return the shifts that were tried and the resultant metrics
 
     Returns:
         np.array:
             The [x, y] shift that should be applied to the field trees to align them with the
-            drone trees
+            drone trees.
+        np.array (optional):
+            A list of (x, y) tuples for shifts which were tested in the coarse stage.
+        np.array (optional):
+            A list of resultant metric values for the tested shifts.
+        float (optional):
+            The metric value for the optimal shift.
     """
     # Build the shifts. Note that our eventual goal is to recover a shift for the observed trees,
     # assuming the drone trees remain fixed
@@ -107,10 +116,50 @@ def find_best_shift(
 
     # Find the shift that produced the highest score
     best_shift = shifts[np.argmax(objective_values)]
+
+    if return_quality_metrics:
+        return best_shift, shifts, objective_values, np.max(objective_values)
+
     return best_shift
 
 
-def align_plot(field_trees, drone_trees, obs_bounds, height_column="height", vis=False):
+def align_plot(
+    field_trees: gpd.GeoDataFrame,
+    drone_trees: gpd.GeoDataFrame,
+    obs_bounds: gpd.GeoDataFrame,
+    height_column: str = "height",
+    vis: bool = False,
+    lower_threshold: float = 2.0,
+    upper_threshold: float = 4.0,
+) -> typing.Tuple[gpd.GeoDataFrame, typing.Tuple, float]:
+    """
+    Align field and drone tree by finding the shift which maximizes the number of trees which are
+    matched between the two sets using a height-dependant threshold.
+
+    Args:
+        field_trees (gpd.GeoDataFrame):
+            Geodataframe of the tree points surveyed in field.
+        drone_trees (gpd.GeoDataFrame):
+            Geodataframe of the tree points detected by drone. Assumed to be a larger spatial extent
+            than the field trees.
+        obs_bounds (gpd.GeoDataFrame):
+            Geodataframe with one row representing the extent surveyed
+        height_column (str, optional):
+            Which column in the tree dataframes contains height information. Defaults to "height".
+        vis (bool, optional):
+            Show the registered trees. Defaults to False.
+        lower_threshold (float, optional):
+            Used for computing a metric of shift quality. The lower bound in meters for the distance
+            from the optimal shift for which points are included in the average. Defaults to 2.0.
+        upper_threshold (float, optional):
+            Used for computing a metric of shift quality. The upper bound in meters for the distance
+            from the optimal shift for which points are included in the average. Defaults to 4.0.
+
+    Returns:
+        gpd.GeoDataFrame: The field trees after the optimal shift has been applied.
+        tuple: The x, y shift in meters that should be applied to the field trees
+        float: The quality metric
+    """
     original_field_CRS = field_trees.crs
     # Transform the drone trees to a cartesian CRS if not already
     field_trees = ensure_projected_CRS(field_trees)
@@ -119,8 +168,8 @@ def align_plot(field_trees, drone_trees, obs_bounds, height_column="height", vis
     drone_trees.to_crs(field_trees.crs, inplace=True)
     obs_bounds.to_crs(field_trees.crs, inplace=True)
 
-    # First compute a rough shift and then a fine one
-    coarse_shift = find_best_shift(
+    # First compute a rough shift.
+    coarse_shift, coarse_shifts, coarse_shifts_metrics, _ = find_best_shift(
         field_trees=field_trees,
         drone_trees=drone_trees,
         obs_bounds=obs_bounds,
@@ -129,9 +178,10 @@ def align_plot(field_trees, drone_trees, obs_bounds, height_column="height", vis
         search_increment=1,
         search_window=10,
         vis=vis,
+        return_quality_metrics=True,
     )
-    # This is initialized from the coarse shift
-    fine_shift = find_best_shift(
+    # Then compute the fine one. This is initialized from the coarse shift
+    fine_shift, _, _, optimal_quality = find_best_shift(
         field_trees=field_trees,
         drone_trees=drone_trees,
         obs_bounds=obs_bounds,
@@ -140,6 +190,7 @@ def align_plot(field_trees, drone_trees, obs_bounds, height_column="height", vis
         search_window=2,
         search_increment=0.2,
         base_shift=coarse_shift,
+        return_quality_metrics=True,
     )
 
     print(f"Rough shift: {coarse_shift}, fine shift: {fine_shift}")
@@ -162,7 +213,25 @@ def align_plot(field_trees, drone_trees, obs_bounds, height_column="height", vis
     # Convert back to the original CRS
     shifted_field_trees.to_crs(original_field_CRS, inplace=True)
 
-    return shifted_field_trees, fine_shift
+    # Compute the quality of the final shift
+    # Compute which tested shifts are within a ring of pre-determined min and max radius around the
+    # optimal shift.
+
+    # Compute the distance of each tested coarse shift from the final optimal shift
+    diffs_from_optimal = np.linalg.norm(
+        coarse_shifts - np.expand_dims(fine_shift, axis=0), axis=1
+    )
+    # Determine which shifts were within the treshold distnace from the optimal shift
+    within_threshold = np.logical_and(
+        diffs_from_optimal > lower_threshold, diffs_from_optimal < upper_threshold
+    )
+    within_threshold_metrics = np.array(coarse_shifts_metrics)[within_threshold]
+
+    # Compute the difference between the optimal metric value and the average for shifts that are
+    # different
+    quality_metric = optimal_quality - np.mean(within_threshold_metrics)
+
+    return shifted_field_trees, fine_shift, quality_metric
 
 
 if __name__ == "__main__":
