@@ -151,12 +151,12 @@ def obj_mee_matching(
 
     obs_bounds_core = obs_bounds.geometry.values[0].buffer(-edge_buffer)
 
-    # Crop to the central area to avoid edge effects
-    core_field_trees = shifted_field_trees_cropped.clip(obs_bounds_core)
-    core_drone_trees = drone_trees_cropped.clip(obs_bounds_core)
-    # Remove the short trees
-    core_field_trees = core_field_trees[core_field_trees[height_column] >= min_height]
-    core_drone_trees = core_drone_trees[core_drone_trees[height_column] >= min_height]
+    # Get indices of
+    core_field_trees = shifted_field_trees_cropped.within(obs_bounds_core)
+    core_drone_trees = drone_trees_cropped.within(obs_bounds_core)
+    # Get indices of tree that are taller than the min height
+    tall_field_trees = shifted_field_trees_cropped[height_column] >= min_height
+    tall_drone_trees = drone_trees_cropped[height_column] >= min_height
 
     # Find which of the core trees were matched based on their indices
     field_core_matched = set(matched_field_tree_inds).intersection(
@@ -188,3 +188,83 @@ def obj_mee_matching(
         return precision, recall, f1
 
     return f1
+
+
+def obj_height_corr(
+    shifted_field_trees: gpd.GeoDataFrame,
+    drone_trees: gpd.GeoDataFrame,
+    obs_bounds: gpd.GeoDataFrame,
+    min_height: float = 10,
+    edge_buffer: float = 5,
+    height_column: str = "height",
+    return_prec_recall: bool = False,
+) -> float:
+    """
+    Compute the F1 score for how many trees matched.
+    Adapted from: https://github.com/open-forest-observatory/ofo-r/blob/3e3d138ffd99539affb7158979d06fc535bc1066/R/tree-map-alignment.R#L138
+
+
+    Args:
+        shifted_field_trees (gpd.GeoDataFrame): The field trees with a candidate shift applied
+        drone_trees (gpd.GeoDataFrame): The drone trees
+        obs_bounds (gpd.GeoDataFrame): The region that was surveyed, shifted commensurately with the field trees
+        min_height (float, optional): Minimum height of field trees to evaluate. Defaults to 10.
+        edge_buffer (float, optional): Only score trees this distance from the boundary of the survey region. Defaults to 5.
+        height_column (str, optional): What column represents the tree heights. Defaults to "height".
+
+    Returns:
+        float: The F1 score for matching
+    """
+    # Crop to the observation bounds
+    shifted_field_trees_cropped = shifted_field_trees.clip(
+        obs_bounds.geometry.values[0]
+    )
+    drone_trees_cropped = drone_trees.clip(obs_bounds.geometry.values[0])
+    # Reset the index to integers starting at 0
+    shifted_field_trees_cropped.reset_index(inplace=True, drop=True)
+    drone_trees_cropped.reset_index(inplace=True, drop=True)
+
+    # Compute the matches between the shifted field points and the drone points
+    matched_field_tree_inds, matched_drone_tree_inds = match_trees_singlestratum(
+        field_trees=shifted_field_trees_cropped,
+        drone_trees=drone_trees_cropped,
+        vis=False,
+    )
+
+    matched_field_heights = shifted_field_trees_cropped.loc[
+        matched_field_tree_inds, "height"
+    ]
+    matched_drone_heights = drone_trees_cropped.loc[matched_drone_tree_inds, "height"]
+    corr = np.corrcoef(matched_field_heights, matched_drone_heights)[0, 1]
+    return corr
+
+    obs_bounds_core = obs_bounds.geometry.values[0].buffer(-edge_buffer)
+
+    # Get mask of trees within the core area
+    core_field_trees = shifted_field_trees_cropped.within(obs_bounds_core)
+    core_drone_trees = drone_trees_cropped.within(obs_bounds_core)
+    # Get indices of tree that are taller than the minimum height
+    tall_field_trees = shifted_field_trees_cropped[height_column] >= min_height
+    tall_drone_trees = drone_trees_cropped[height_column] >= min_height
+
+    # Determine the mask of which trees are both within the core and tall enough
+    valid_field_trees = core_field_trees & tall_field_trees
+    valid_drone_trees = core_drone_trees & tall_drone_trees
+
+    # Reorder such that each row is a pair
+    reordered_drone_trees = shifted_field_trees_cropped.iloc[matched_field_tree_inds, :]
+    reordered_field_trees = drone_trees_cropped.iloc[matched_drone_tree_inds, :]
+
+    # Reordered validity
+    reordered_field_validity = valid_field_trees.iloc[matched_field_tree_inds]
+    reordered_drone_validity = valid_drone_trees.iloc[matched_drone_tree_inds]
+
+    both_valid = reordered_field_validity & reordered_drone_validity
+
+    #
+    reordered_drone_tree_heights = reordered_drone_trees.loc[both_valid, height_column]
+    reordered_field_tree_heights = reordered_field_trees.loc[both_valid, height_column]
+
+    corr = np.corrcoef(reordered_drone_tree_heights, reordered_field_tree_heights)[0, 1]
+
+    return corr
