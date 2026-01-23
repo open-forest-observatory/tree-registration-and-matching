@@ -29,6 +29,21 @@ class Triangle:
     t2R: float  # The uncertainty (squared) in the ratio
     log_p: float  # The log of the perimiter
 
+    def score_match(self, other: "Triangle", unmatched_value=100):
+        """Return the score and whether or not the threshold is satisifed"""
+        R_error = (self.R - other.R) ** 2
+        C_error = (self.C - other.C) ** 2
+
+        t_R = self.t2R + other.t2R
+        t_C = self.t2C + other.t2C
+
+        matches = (
+            (R_error < t_R)
+            and (C_error < t_C)
+            and (self.orientation == other.orientation)
+        )
+        return (R_error + C_error) if matches else unmatched_value
+
 
 class SpotPattern:
     """Represents a spot pattern from a whale shark image"""
@@ -44,9 +59,18 @@ class SpotPattern:
         self.spots = np.array(spots, dtype=float)
         self.name = name
         self.triangles = []
+        self._normalize_units()
         self._build_triangles()
 
-    def _build_triangles(self, epsilon=0.1):
+    def _normalize_units(self):
+        # Keep the aspect the same while normalizing the coordinates to the range (0, 1)
+        min_coords = np.min(self.spots, axis=0, keepdims=True)
+        max_coords = np.max(self.spots, axis=0, keepdims=True)
+
+        biggest_diff = (max_coords - min_coords).max()
+        self.spots = (self.spots - min_coords) / biggest_diff
+
+    def _build_triangles(self, epsilon=5e-3):
         """Build all possible triangles from spot triplets"""
         n_spots = len(self.spots)
 
@@ -138,139 +162,23 @@ class SpotPattern:
         plt.show()
 
 
-class WhaleSharkMatcher:
-    """
-    Modified Groth algorithm for matching whale shark spot patterns
-    """
+class Matcher:
+    def compare_patterns(self, pattern_1: SpotPattern, pattern_2: SpotPattern):
+        comparisons = [
+            [t1.score_match(t2) for t2 in pattern_2.triangles]
+            for t1 in pattern_1.triangles
+        ]
+        # The i dimension should be pattern1, the j should be pattern2
+        # The third dimension has length 2. If the triangles match, the value  will be the matching
+        # score. Else, it will be the fill value of 100
+        comparisons = np.array(comparisons)
 
-    def __init__(
-        self,
-        length_ratio_tolerance: float = 0.15,
-        cosine_tolerance: float = 0.15,
-        min_triangle_matches: int = 3,
-    ):
-        """
-        Initialize matcher with tolerances
-
-        Args:
-            length_ratio_tolerance: Maximum difference in length ratios
-            cosine_tolerance: Maximum difference in cosines
-            min_triangle_matches: Minimum number of triangle matches required
-        """
-        self.length_ratio_tolerance = length_ratio_tolerance
-        self.cosine_tolerance = cosine_tolerance
-        self.min_triangle_matches = min_triangle_matches
-
-    def match_triangles(
-        self, pattern1: SpotPattern, pattern2: SpotPattern
-    ) -> List[Tuple[Triangle, Triangle]]:
-        """
-        Find matching triangles between two patterns
-
-        Returns list of (triangle1, triangle2) pairs that match
-        """
         matches = []
-
-        for t1 in pattern1.triangles:
-            for t2 in pattern2.triangles:
-                if self._triangles_match(t1, t2):
-                    matches.append((t1, t2))
-
-        return matches
-
-    def _triangles_match(self, t1: Triangle, t2: Triangle) -> bool:
-        """
-        Check if two triangles match within tolerances
-        """
-        # Check length ratio
-        if abs(t1.length_ratio - t2.length_ratio) > self.length_ratio_tolerance:
-            return False
-
-        # Check cosine at vertex 1
-        if abs(t1.cosine_v1 - t2.cosine_v1) > self.cosine_tolerance:
-            return False
-
-        # Check orientation (must be same)
-        if t1.orientation != t2.orientation:
-            return False
-
-        return True
-
-    def compute_match_score(
-        self, pattern1: SpotPattern, pattern2: SpotPattern
-    ) -> float:
-        """
-        Compute overall match score between two patterns
-
-        Returns:
-            Score between 0 and 1, where 1 is perfect match
-        """
-        triangle_matches = self.match_triangles(pattern1, pattern2)
-
-        # No matches
-        if len(triangle_matches) == 0:
-            return 0.0
-
-        # Vote for spot correspondences
-        spot_votes = self._vote_for_correspondences(triangle_matches)
-
-        # Calculate score based on number of consistent spot matches
-        max_possible = min(len(pattern1.spots), len(pattern2.spots))
-        n_matched = len(spot_votes)
-
-        # Weight by triangle match quality
-        triangle_score = len(triangle_matches) / max(
-            len(pattern1.triangles), len(pattern2.triangles)
-        )
-        spot_score = n_matched / max_possible if max_possible > 0 else 0
-
-        # Combined score (weighted average)
-        score = 0.6 * spot_score + 0.4 * triangle_score
-
-        return score
-
-    def _vote_for_correspondences(
-        self, triangle_matches: List[Tuple[Triangle, Triangle]]
-    ) -> Dict[Tuple[int, int], int]:
-        """
-        Vote for spot correspondences based on triangle matches
-
-        Returns dictionary of (spot1_idx, spot2_idx) -> vote_count
-        """
-        votes = {}
-
-        for t1, t2 in triangle_matches:
-            # Each triangle proposes 3 spot correspondences
-            for i in range(3):
-                correspondence = (t1.vertices[i], t2.vertices[i])
-                votes[correspondence] = votes.get(correspondence, 0) + 1
-
-        # Filter to keep only highly voted correspondences
-        threshold = max(votes.values()) * 0.5 if votes else 0
-        return {k: v for k, v in votes.items() if v >= threshold}
-
-    def find_best_match(
-        self, query: SpotPattern, library: List[SpotPattern], threshold: float = 0.3
-    ) -> List[Tuple[str, float]]:
-        """
-        Find best matches for query pattern in a library
-
-        Args:
-            query: Query spot pattern
-            library: List of spot patterns to search
-            threshold: Minimum score to consider a match
-
-        Returns:
-            List of (pattern_name, score) sorted by score (best first)
-        """
-        results = []
-
-        for pattern in library:
-            score = self.compute_match_score(query, pattern)
-            if score >= threshold:
-                results.append((pattern.name, score))
-
-        # Sort by score (descending)
-        results.sort(key=lambda x: x[1], reverse=True)
-
-        return results
+        # Iterate over the first dimension
+        for index_1 in range(comparisons.shape[0]):
+            index_2_match = int(np.argmin(comparisons[index_1, :]))
+            # This indicates it was not a background value
+            if comparisons[index_1, index_2_match] < 100:
+                matches.append((index_1, index_2_match))
+        print(matches)
+        print(len(matches))
