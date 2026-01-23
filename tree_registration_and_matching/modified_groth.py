@@ -57,18 +57,17 @@ class SpotPattern:
             side_ab = np.linalg.norm(pb - pa)
             side_bc = np.linalg.norm(pc - pb)
             side_ca = np.linalg.norm(pa - pc)
+            # If it's index 0, that means vertex c was not included, etc.
+            not_included_dict = {0: c, 1: a, 2: b}
 
             sorting_inds = tuple(np.argsort([side_ab, side_bc, side_ca]).squeeze())
 
-            # Remap according to the "Formation of triangles" section
-            i1, i2, i3 = {
-                (0, 1, 2): (a, b, c),
-                (0, 2, 1): (b, a, c),
-                (1, 0, 2): (c, b, a),
-                (1, 2, 0): (c, a, b),
-                (2, 0, 1): (b, c, a),
-                (2, 1, 0): (a, c, b),
-            }[sorting_inds]
+            # Vertex 1 is not included in the intermediate side.
+            i1 = not_included_dict[sorting_inds[1]]
+            # Vertex 2 is not included in the longest side
+            i2 = not_included_dict[sorting_inds[2]]
+            # Vertex 3 is not included in the shortest side
+            i3 = not_included_dict[sorting_inds[0]]
 
             # Rerun with the correct order
             p1, p2, p3 = self.spots[i1], self.spots[i2], self.spots[i3]
@@ -81,8 +80,7 @@ class SpotPattern:
             sorting_inds = np.argsort([side_1, side_2, side_3]).squeeze()
             # print(sorting_inds, sorted([side_1, side_2, side_3]))
             if np.any(sorting_inds != np.array([1, 0, 2])):
-                print(sorting_inds)
-            continue
+                print(sorting_inds, sorted([side_1, side_2, side_3]))
             sides = (side_1, side_2, side_3)
 
             # Skip degenerate triangles
