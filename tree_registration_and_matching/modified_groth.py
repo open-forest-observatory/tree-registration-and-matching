@@ -22,9 +22,12 @@ class Triangle:
 
     vertices: Tuple[int, int, int]  # Indices of the three spots
     sides: np.ndarray  # Lengths of the three sides
-    length_ratio: float  # Ratio of shortest to longest side
-    cosine_v1: float  # Cosine of angle at vertex 1
+    R: float  # Ratio of shortest to longest side
+    C: float  # Cosine of angle at vertex 1
     orientation: int  # +1 for CCW, -1 for CW
+    t2C: float  # The uncertainty (squared) in the cosine
+    t2R: float  # The uncertainty (squared) in the ratio
+    log_p: float  # The log of the perimiter
 
 
 class SpotPattern:
@@ -43,7 +46,7 @@ class SpotPattern:
         self.triangles = []
         self._build_triangles()
 
-    def _build_triangles(self):
+    def _build_triangles(self, epsilon=0.1):
         """Build all possible triangles from spot triplets"""
         n_spots = len(self.spots)
 
@@ -77,41 +80,61 @@ class SpotPattern:
             side_2 = float(np.linalg.norm(p1 - p2))
             side_3 = float(np.linalg.norm(p1 - p3))
 
-            sorting_inds = np.argsort([side_1, side_2, side_3]).squeeze()
-            # print(sorting_inds, sorted([side_1, side_2, side_3]))
-            if np.any(sorting_inds != np.array([1, 0, 2])):
-                print(sorting_inds, sorted([side_1, side_2, side_3]))
-            sides = (side_1, side_2, side_3)
+            sides = [side_1, side_2, side_3]
 
-            # Skip degenerate triangles
-            if np.min(sides) < 1e-6:
-                continue
+            sorting_inds = np.argsort([side_1, side_2, side_3]).squeeze()
 
             # Calculate length ratio (shortest/longest)
-            length_ratio = np.min(sides) / np.max(sides)
+            R = side_3 / side_2
 
             # Calculate cosine at vertex 1
-            # Using law of cosines: cos(A) = (b² + c² - a²) / (2bc)
-            cosine_v1 = (side_12**2 + side_31**2 - side_23**2) / (2 * side_12 * side_31)
-            cosine_v1 = np.clip(cosine_v1, -1.0, 1.0)  # Handle numerical errors
+            C = (
+                (p3[0] - p1[0]) * (p2[0] - p1[0]) + (p3[1] - p1[1]) * (p2[1] - p1[1])
+            ) / (side_3 * side_2)
 
             # Calculate orientation (CCW = +1, CW = -1)
+            # TODO validate if this is correct
             cross = (p2[0] - p1[0]) * (p3[1] - p1[1]) - (p2[1] - p1[1]) * (
                 p3[0] - p1[0]
             )
             orientation = 1 if cross > 0 else -1
 
+            # Log of perimiter
+            log_p = np.log(np.sum(sides))
+
+            ## Compute the tolerences
+            # F
+            F = epsilon**2 * (1 / side_3**2 - C / (side_3 * side_2) + 1 / side_2**2)
+            # S is the sine of the angle at vertex 1
+            S = np.sin(np.arccos(C))
+            # t^2_R
+            t2R = 2 * R**2 * F
+            t2C = 2 * S**2 * F + 3 * C**2 * F**2
+
             triangle = Triangle(
                 vertices=indices,
                 sides=sides,
-                length_ratio=length_ratio,
-                cosine_v1=cosine_v1,
+                R=R,
+                C=C,
                 orientation=orientation,
+                t2R=t2R,
+                t2C=t2C,
+                log_p=log_p,
             )
             self.triangles.append(triangle)
 
     def plot(self):
         plt.scatter(self.spots[:, 0], self.spots[:, 1])
+        plt.show()
+
+        R_values = [t.R for t in self.triangles]
+        plt.hist(R_values)
+        plt.title("R values distribution")
+        plt.show()
+
+        C_values = [t.C for t in self.triangles]
+        plt.hist(C_values)
+        plt.title("C values distribution")
         plt.show()
 
 
