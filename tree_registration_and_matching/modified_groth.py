@@ -49,14 +49,41 @@ class SpotPattern:
 
         # Generate all combinations of 3 spots
         for indices in combinations(range(n_spots), 3):
-            i, j, k = indices
-            p1, p2, p3 = self.spots[i], self.spots[j], self.spots[k]
+            a, b, c = indices
+
+            pa, pb, pc = self.spots[a], self.spots[b], self.spots[c]
 
             # Calculate side lengths
-            side_12 = np.linalg.norm(p2 - p1)
-            side_23 = np.linalg.norm(p3 - p2)
-            side_31 = np.linalg.norm(p1 - p3)
-            sides = np.array([side_12, side_23, side_31])
+            side_ab = np.linalg.norm(pb - pa)
+            side_bc = np.linalg.norm(pc - pb)
+            side_ca = np.linalg.norm(pa - pc)
+
+            sorting_inds = tuple(np.argsort([side_ab, side_bc, side_ca]).squeeze())
+
+            # Remap according to the "Formation of triangles" section
+            i1, i2, i3 = {
+                (0, 1, 2): (a, b, c),
+                (0, 2, 1): (b, a, c),
+                (1, 0, 2): (c, b, a),
+                (1, 2, 0): (c, a, b),
+                (2, 0, 1): (b, c, a),
+                (2, 1, 0): (a, c, b),
+            }[sorting_inds]
+
+            # Rerun with the correct order
+            p1, p2, p3 = self.spots[i1], self.spots[i2], self.spots[i3]
+
+            # Calculate side lengths
+            side_1 = float(np.linalg.norm(p2 - p3))
+            side_2 = float(np.linalg.norm(p1 - p2))
+            side_3 = float(np.linalg.norm(p1 - p3))
+
+            sorting_inds = np.argsort([side_1, side_2, side_3]).squeeze()
+            # print(sorting_inds, sorted([side_1, side_2, side_3]))
+            if np.any(sorting_inds != np.array([1, 0, 2])):
+                print(sorting_inds)
+            continue
+            sides = (side_1, side_2, side_3)
 
             # Skip degenerate triangles
             if np.min(sides) < 1e-6:
