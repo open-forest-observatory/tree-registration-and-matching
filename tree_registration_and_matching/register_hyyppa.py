@@ -1,6 +1,10 @@
 import numpy as np
 from scipy.optimize import fmin
 import warnings
+import geopandas as gpd
+import matplotlib.pyplot as plt
+
+from tree_registration_and_matching.utils import ensure_projected_CRS
 
 
 def fit_euclidean_transformation(xy_mat1, xy_mat2, parameters=None):
@@ -52,10 +56,10 @@ def fit_euclidean_transformation(xy_mat1, xy_mat2, parameters=None):
 
     # Get parameters from input
     if parameters is not None:
-        R_local = parameters.get('R_local', R_local)
-        k = parameters.get('k', k)
-        r_thres = parameters.get('r_thres', r_thres)
-        max_iter = parameters.get('max_iter', max_iter)
+        R_local = parameters.get("R_local", R_local)
+        k = parameters.get("k", k)
+        r_thres = parameters.get("r_thres", r_thres)
+        max_iter = parameters.get("max_iter", max_iter)
 
     # Convert to numpy arrays
     xy_mat1 = np.array(xy_mat1, dtype=float)
@@ -72,8 +76,10 @@ def fit_euclidean_transformation(xy_mat1, xy_mat2, parameters=None):
 
     if N_objects_vect[1] < k:
         k = N_objects_vect[1]
-        msg = (f'Number of objects in dataset 2 (and thus the potential number of matches) '
-               f'is smaller than given parameter k. k was set to {N_objects_vect[1]}')
+        msg = (
+            f"Number of objects in dataset 2 (and thus the potential number of matches) "
+            f"is smaller than given parameter k. k was set to {N_objects_vect[1]}"
+        )
         warnings.warn(msg)
 
     # Construct the feature descriptor for each object in each of the point clouds
@@ -85,7 +91,10 @@ def fit_euclidean_transformation(xy_mat1, xy_mat2, parameters=None):
     # descriptors of the two point clouds
     feat_desc_pdist = np.zeros((N_objects_vect[1], N_objects_vect[0]))
     for i in range(feat_desc_mat1.shape[1]):
-        feat_desc_pdist = feat_desc_pdist + (feat_desc_mat2[:, i:i+1] - feat_desc_mat1[:, i].T) ** 2
+        feat_desc_pdist = (
+            feat_desc_pdist
+            + (feat_desc_mat2[:, i : i + 1] - feat_desc_mat1[:, i].T) ** 2
+        )
     feat_desc_pdist = np.sqrt(feat_desc_pdist)
 
     # For each object in point cloud 2, find the most similar feature
@@ -129,8 +138,9 @@ def fit_euclidean_transformation(xy_mat1, xy_mat2, parameters=None):
         theta = theta_magn * theta_sign
 
         # The corresponding rotation matrix
-        R_mat = np.array([[np.cos(theta), -np.sin(theta)],
-                         [np.sin(theta), np.cos(theta)]])
+        R_mat = np.array(
+            [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
+        )
 
         # Computing the translation vector
         xy_1 = xy_mat1[idx_object_1, :]
@@ -138,8 +148,11 @@ def fit_euclidean_transformation(xy_mat1, xy_mat2, parameters=None):
         t_vect = xy_2 - R_mat @ xy_1
 
         # Find closest pairs and compute number of matches
-        from_idx2_to_closest_idx1, from_idx2_to_min_dist1, n_of_matches = \
-            get_closest_pairs_after_transformation(xy_mat1, xy_mat2, R_mat, t_vect, r_thres)
+        from_idx2_to_closest_idx1, from_idx2_to_min_dist1, n_of_matches = (
+            get_closest_pairs_after_transformation(
+                xy_mat1, xy_mat2, R_mat, t_vect, r_thres
+            )
+        )
 
         if n_of_matches > max_n_of_matches:
             max_n_of_matches = n_of_matches
@@ -155,8 +168,9 @@ def fit_euclidean_transformation(xy_mat1, xy_mat2, parameters=None):
 
     # Function to minimize: beta[0] = theta, beta[1] = t_x, beta[2] = t_y
     def obj_fun(beta):
-        R = np.array([[np.cos(beta[0]), -np.sin(beta[0])],
-                     [np.sin(beta[0]), np.cos(beta[0])]])
+        R = np.array(
+            [[np.cos(beta[0]), -np.sin(beta[0])], [np.sin(beta[0]), np.cos(beta[0])]]
+        )
         t = np.array([beta[1], beta[2]])
         transformed = (R @ xy_mat1_matching.T).T + t
         return np.sum((transformed - xy_mat2_matching) ** 2)
@@ -168,16 +182,18 @@ def fit_euclidean_transformation(xy_mat1, xy_mat2, parameters=None):
 
     # Optimized parameters for the Euclidean transformation
     theta = beta[0]
-    R_mat = np.array([[np.cos(theta), -np.sin(theta)],
-                     [np.sin(theta), np.cos(theta)]])
+    R_mat = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
     t_vect = np.array([[beta[1]], [beta[2]]])  # column vector
 
     # Computing the number of matches based on the refined transformation
     _, _, n_of_matches = get_closest_pairs_after_transformation(
-        xy_mat1, xy_mat2, R_mat, t_vect.flatten(), r_thres)
+        xy_mat1, xy_mat2, R_mat, t_vect.flatten(), r_thres
+    )
 
     # Undoing the centering to get the correct translation vector
-    t_vect = t_vect - (R_mat @ xy_mat1_mean.reshape(-1, 1)) + xy_mat2_mean.reshape(-1, 1)
+    t_vect = (
+        t_vect - (R_mat @ xy_mat1_mean.reshape(-1, 1)) + xy_mat2_mean.reshape(-1, 1)
+    )
 
     return theta, R_mat, t_vect, n_of_matches, feat_desc_cell_array
 
@@ -202,8 +218,9 @@ def compute_feature_descriptors(xy_mat, R_local):
     y_vect = xy_mat[:, 1]
 
     # Pair-wise distances between all objects
-    p_dist_mat = np.sqrt((x_vect[:, np.newaxis] - x_vect) ** 2 +
-                         (y_vect[:, np.newaxis] - y_vect) ** 2)
+    p_dist_mat = np.sqrt(
+        (x_vect[:, np.newaxis] - x_vect) ** 2 + (y_vect[:, np.newaxis] - y_vect) ** 2
+    )
 
     # Setting the "self-distance" to infinity
     np.fill_diagonal(p_dist_mat, np.inf)
@@ -217,16 +234,18 @@ def compute_feature_descriptors(xy_mat, R_local):
 
     # Compute the normalized characteristic directions
     char_dirs = np.column_stack([x_closest - x_vect, y_closest - y_vect])
-    char_dirs = char_dirs / np.sqrt(np.sum(char_dirs ** 2, axis=1, keepdims=True))
+    char_dirs = char_dirs / np.sqrt(np.sum(char_dirs**2, axis=1, keepdims=True))
 
     # Directions perpendicular to the characteristic directions
     perp_char_dirs = np.column_stack([-char_dirs[:, 1], char_dirs[:, 0]])
 
     # Transform coordinates into local coordinate frame
-    v_mat = ((x_vect[:, np.newaxis] - x_vect) * char_dirs[:, 0:1] +
-             (y_vect[:, np.newaxis] - y_vect) * char_dirs[:, 1:2])
-    w_mat = ((x_vect[:, np.newaxis] - x_vect) * perp_char_dirs[:, 0:1] +
-             (y_vect[:, np.newaxis] - y_vect) * perp_char_dirs[:, 1:2])
+    v_mat = (x_vect[:, np.newaxis] - x_vect) * char_dirs[:, 0:1] + (
+        y_vect[:, np.newaxis] - y_vect
+    ) * char_dirs[:, 1:2]
+    w_mat = (x_vect[:, np.newaxis] - x_vect) * perp_char_dirs[:, 0:1] + (
+        y_vect[:, np.newaxis] - y_vect
+    ) * perp_char_dirs[:, 1:2]
 
     # Compute angles with respect to the characteristic directions
     angle_mat = np.arctan2(w_mat, v_mat)
@@ -302,8 +321,8 @@ def get_closest_pairs_after_transformation(xy_mat1, xy_mat2, R_mat, t_vect, r_th
 
     # Pair-wise distances
     transformed_loc_p_dist = np.sqrt(
-        (xy_mat2[:, 0:1] - xy_mat1_transformed[:, 0].T) ** 2 +
-        (xy_mat2[:, 1:2] - xy_mat1_transformed[:, 1].T) ** 2
+        (xy_mat2[:, 0:1] - xy_mat1_transformed[:, 0].T) ** 2
+        + (xy_mat2[:, 1:2] - xy_mat1_transformed[:, 1].T) ** 2
     )
 
     # Find closest object in transformed point cloud 1 for each object in point cloud 2
@@ -316,8 +335,60 @@ def get_closest_pairs_after_transformation(xy_mat1, xy_mat2, R_mat, t_vect, r_th
     return from_idx2_to_closest_idx1, from_idx2_to_min_dist1, n_of_matches
 
 
+def align_plot_hyyppa(field_trees, detected_trees):
+    original_field_CRS = field_trees.crs
+    # Transform the drone trees to a cartesian CRS if not already
+    field_trees = ensure_projected_CRS(field_trees)
+
+    # Ensure that drone trees are in the same CRS
+    detected_trees.to_crs(field_trees.crs, inplace=True)
+
+    field_trees_points = np.array(field_trees.geometry.get_coordinates())
+    detected_trees_points = np.array(detected_trees.geometry.get_coordinates())
+
+    # Note that the field trees should be second
+    theta, R_mat, t_vect, n_of_matches, feat_desc = fit_euclidean_transformation(
+        detected_trees_points, field_trees_points
+    )
+
+    transform = np.eye(3)
+    transform[:2, :2] = R_mat
+    transform[:2, 2:] = t_vect
+
+    transform_inv = np.linalg.inv(transform)
+
+    field_trees_shifted = field_trees.copy()
+    field_trees_shifted.geometry = field_trees.geometry.affine_transform(
+        [
+            transform_inv[0, 0],
+            transform_inv[0, 1],
+            transform_inv[1, 0],
+            transform_inv[1, 1],
+            transform_inv[0, 2],
+            transform_inv[1, 2],
+        ]
+    )
+    f, ax = plt.subplots()
+
+    field_trees.plot(ax=ax, c="b", label="field trees")
+    field_trees_shifted.plot(ax=ax, c="r", label="field trees shifted")
+    plt.show()
+
+    field_trees_shifted.to_crs(original_field_CRS)
+    return field_trees_shifted
+
+
 # Example usage
 if __name__ == "__main__":
+    dataset = "0008_000256_000254"
+    field_trees = gpd.read_file(
+        f"/ofo-share/repos/david/tree-registration-and-matching/data/ofo-example-2/field_trees/{dataset}.gpkg"
+    )
+    detected_trees = gpd.read_file(
+        f"/ofo-share/repos/david/tree-registration-and-matching/data/ofo-example-2/detected-trees/{dataset}.gpkg"
+    )
+    align_plot_hyyppa(field_trees, detected_trees)
+
     # Create synthetic test data
     np.random.seed(42)
 
@@ -326,8 +397,12 @@ if __name__ == "__main__":
 
     # Create dataset 2 by applying a known transformation to a subset of dataset 1
     true_theta = np.pi / 4  # 45 degrees
-    true_R = np.array([[np.cos(true_theta), -np.sin(true_theta)],
-                       [np.sin(true_theta), np.cos(true_theta)]])
+    true_R = np.array(
+        [
+            [np.cos(true_theta), -np.sin(true_theta)],
+            [np.sin(true_theta), np.cos(true_theta)],
+        ]
+    )
     true_t = np.array([20, 30])
 
     # Select subset and transform
@@ -342,15 +417,11 @@ if __name__ == "__main__":
     xy_mat2 = np.vstack([xy_mat2, np.random.rand(10, 2) * 100])
 
     # Fit the transformation
-    parameters = {
-        'R_local': 15,
-        'k': 25,
-        'r_thres': 2.0,
-        'max_iter': 300
-    }
+    parameters = {"R_local": 15, "k": 25, "r_thres": 2.0, "max_iter": 300}
 
     theta, R_mat, t_vect, n_of_matches, feat_desc = fit_euclidean_transformation(
-        xy_mat1, xy_mat2, parameters)
+        xy_mat1, xy_mat2, parameters
+    )
 
     print("Fitted transformation:")
     print(f"Rotation angle: {np.degrees(theta):.2f} degrees")
