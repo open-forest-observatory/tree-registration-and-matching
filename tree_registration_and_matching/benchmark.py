@@ -9,28 +9,33 @@ from tree_registration_and_matching.utils import ensure_projected_CRS
 
 
 def score_approach(
-    detected_tree_folder: str,
-    field_tree_folder: str,
+    field_trees_folder: str,
+    CHMs_or_detected_trees_folder: str,
     plots_file: str,
     alignment_algorithm=align_plot,
+    CHM_approach: bool = False,
     vis_plots: bool = False,
     vis_results: bool = True,
 ) -> np.array:
     """Assess the quality of the shift on a set of plots.
 
     Args:
-        detected_tree_folder (str):
-            The folder of geospatial files representing detected tree tops, one per plot.
         field_tree_folder (str):
             The folder of geospatial files representing the surveyed trees, one per plot. The files
             this folder should be named identically to those in `detected_tree_folder`.
+        CHMs_or_detected_trees_folder (str):
+            The folder of geospatial files representing either:
+                * Canopy height models, one per plot. This data will be in a raster format (e.g. .tif)
+                # Detected tree tops, one per plot. This data will be in a vector format (e.g. gpkg)
         plots_file (str):
             A path to a geopackage file with geometry representing the surveyed area. The 'plot_id'
-            field represents which of the paired (detected/field) tree files it corresponds to,
-            without the file extension.
+            field represents which dataset (field trees plus CHMs or detected trees) files it
+            corresponds to. Note that the plot_id field will not contain file extension.
         alignment_algorithm (function, optional):
             A function which aligns the field and detected trees. The second return argument should
             be the (x, y) shift. Defaults to align_plot.
+        CHM_approach(bool, optional):
+            Whether the approach acts on CHM data, rather than detected trees. Defaults to False.
         vis_plots (bool, optional):
             Should each plot be shown. Defaults to False.
         vis_results (bool, optional):
@@ -48,15 +53,15 @@ def score_approach(
     all_plot_bounds = gpd.read_file(plots_file)
 
     # List all the files in both input folders
-    detected_tree_files = sorted(detected_tree_folder.glob("*.gpkg"))
-    field_tree_files = sorted(field_tree_folder.glob("*.gpkg"))
+    field_tree_files = sorted(field_trees_folder.glob("*.gpkg"))
+    CHMs_or_detected_trees_files = sorted(CHMs_or_detected_trees_folder.glob("*.gpkg"))
 
     # Ensure there are the same number of files
-    if len(detected_tree_files) != len(field_tree_files):
+    if len(field_tree_files) != len(CHMs_or_detected_trees_files):
         raise ValueError("Different number of files")
 
-    if set([f.stem for f in detected_tree_files]) != set(
-        [f.stem for f in field_tree_files]
+    if set([f.stem for f in field_tree_files]) != set(
+        [f.stem for f in CHMs_or_detected_trees_files]
     ):
         raise ValueError("Different filenames")
 
@@ -64,38 +69,51 @@ def score_approach(
     all_shifts = []
 
     # Iterate over files
-    for detected_tree_file in detected_tree_files:
+    for field_tree_file in field_tree_files:
         # The field tree should have the same filename (different folder)
-        field_tree_file = Path(field_tree_folder, detected_tree_file.name)
+        CHMs_or_detected_trees_file = Path(
+            CHMs_or_detected_trees_folder, field_tree_file.name
+        )
 
-        # Read both files
+        # Read the field trees and ensure that a projected CRS is used
         field_trees = gpd.read_file(field_tree_file)
-        detected_trees = gpd.read_file(detected_tree_file)
-
-        # Dataset name
-        plot_id = detected_tree_file.stem[:4]
-        plot_bounds = all_plot_bounds.query("plot_id == @plot_id")
-
-        # Make sure the two datasets have the same CRS and it's meters-based
         field_trees = ensure_projected_CRS(field_trees)
-        detected_trees.to_crs(field_trees.crs, inplace=True)
+
+        # Read the plot name and extract the plot bounds for this dataset
+        # TODO, make optional
+        plot_id = field_tree_file.stem[:4]
+        plot_bounds = all_plot_bounds.query("plot_id == @plot_id")
         plot_bounds.to_crs(field_trees.crs, inplace=True)
 
-        # Visualize the three datasets if requested
-        if vis_plots:
-            f, ax = plt.subplots()
-            plot_bounds.boundary.plot(
-                ax=ax, color="k", markersize=2, label="plot bounds"
-            )
-            detected_trees.plot(ax=ax, c="b", markersize=2, label="detected trees")
-            field_trees.plot(ax=ax, c="r", markersize=2, label="surveyed trees")
-            plt.title(f"Visualization for {plot_id}")
-            plt.legend()
-            plt.show()
+        if CHM_approach:
+            pass
+            # TODO, we have to decide here whether to pass the CHM path or the already opened CHM
+            # driver
+            # TODO add a raster-specific visualization approach
+        else:
+            # Read the detected trees and convert to the same CRS as the field trees
+            contnent_to_register_to = gpd.read_file(CHMs_or_detected_trees_file)
+            contnent_to_register_to.to_crs(field_trees.crs, inplace=True)
+
+            # Visualize the three datasets if requested
+            if vis_plots:
+                f, ax = plt.subplots()
+                plot_bounds.boundary.plot(
+                    ax=ax, color="k", markersize=2, label="plot bounds"
+                )
+                contnent_to_register_to.plot(
+                    ax=ax, c="b", markersize=2, label="detected trees"
+                )
+                field_trees.plot(ax=ax, c="r", markersize=2, label="surveyed trees")
+                plt.title(f"Visualization for {plot_id}")
+                plt.legend()
+                plt.show()
 
         # Run aligment
         _, estimated_shift = alignment_algorithm(
-            field_trees=field_trees, drone_trees=detected_trees, obs_bounds=plot_bounds
+            field_trees,
+            contnent_to_register_to,
+            plot_bounds,
         )
         # Record shift
         all_shifts.append(estimated_shift)
