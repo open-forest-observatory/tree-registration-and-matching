@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import rasterio as rio
 import shapely
+import typing
 from skimage.filters import gaussian
 from skimage.segmentation import watershed
 
@@ -133,20 +134,25 @@ def compute_m2_m1_ratio(
 
 
 def find_best_shift(
-    raster_file,
-    points_file,
+    tree_points,
+    CHM,
+    plot_bounds: typing.Never = None,
     comparison_func=corr_func,
     height_col="height",
-    x_range=(-100, 100, 10),
-    y_range=(-100, 100, 10),
+    x_range=(-10, 10, 1),
+    y_range=(-10, 10, 1),
     vis=False,
 ):
     """Search for the shift (dx, dy) that maximizes the Pearson correlation between
     sampled raster elevations at shifted point locations and the provided point heights.
 
     Args:
-        raster_file (str): Path to the raster file.
-        points_file (str): Path to the points file (GeoPackage, shapefile, etc.).
+        tree_points (gpd.GeoDataFrame):
+            Loaded geodataframe with points geometry representing the locations of trees.
+        CHM (rasterio.Raster):
+            File handler opened by rasterio.
+        plot_bounds (unused):
+            Only present for compatability with other styles of registration.
         comparison_func (functional):
             The function which takes in the true and sampled heights and returns a score which is
             interpreted as higher is better.
@@ -179,27 +185,26 @@ def find_best_shift(
 
     metrics = []
 
-    with rio.open(raster_file) as raster:
-        # Read the points, ensuring they are in the same CRS as the raster
-        sample_points = gpd.read_file(points_file).to_crs(raster.crs)
+    # Convert the tree points to the same CRS as the CHM
+    tree_points = tree_points.to_crs(CHM.crs)
 
-        # Extract the xy locations of the points
-        xy_points = shapely.get_coordinates(sample_points.geometry)
-        # Extract the field-measured heights
-        provided_heights = sample_points[height_col].values
+    # Extract the xy locations of the points
+    xy_points = shapely.get_coordinates(tree_points.geometry)
+    # Extract the field-measured heights
+    provided_heights = tree_points[height_col].values
 
-        # Iterate over the grid of possible shifts
-        for dx, dy in shifts:
-            # Apply the shift to the initial tree locations
-            shifted_xy_points = xy_points + np.array([dx, dy])
+    # Iterate over the grid of possible shifts
+    for dx, dy in shifts:
+        # Apply the shift to the initial tree locations
+        shifted_xy_points = xy_points + np.array([dx, dy])
 
-            # Query the CHM values at the shifted points
-            sampled_heights = np.array(
-                list(rio.sample.sample_gen(raster, shifted_xy_points))
-            ).squeeze()
+        # Query the CHM values at the shifted points
+        sampled_heights = np.array(
+            list(rio.sample.sample_gen(CHM, shifted_xy_points))
+        ).squeeze()
 
-            # Compute the metric comparing the provided and sampled heights
-            metrics.append(comparison_func(provided_heights, sampled_heights))
+        # Compute the metric comparing the provided and sampled heights
+        metrics.append(comparison_func(provided_heights, sampled_heights))
 
     # Create a 2D representation of the metrics, with the i dimension representing y shifts
     # TODO figure out if there's a top-bottom flip
@@ -233,4 +238,4 @@ def find_best_shift(
         "x_vals": x_vals,
         "y_vals": y_vals,
         "ratio": ratio,
-    }
+    }, best_shift

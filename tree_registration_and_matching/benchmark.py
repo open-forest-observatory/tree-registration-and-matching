@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import rasterio as rio
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -53,8 +54,8 @@ def score_approach(
     all_plot_bounds = gpd.read_file(plots_file)
 
     # List all the files in both input folders
-    field_tree_files = sorted(field_trees_folder.glob("*.gpkg"))
-    CHMs_or_detected_trees_files = sorted(CHMs_or_detected_trees_folder.glob("*.gpkg"))
+    field_tree_files = sorted(field_trees_folder.glob("*"))
+    CHMs_or_detected_trees_files = sorted(CHMs_or_detected_trees_folder.glob("*"))
 
     # Ensure there are the same number of files
     if len(field_tree_files) != len(CHMs_or_detected_trees_files):
@@ -70,10 +71,10 @@ def score_approach(
 
     # Iterate over files
     for field_tree_file in field_tree_files:
-        # The field tree should have the same filename (different folder)
+        # TODO this should be more flexible for file extension
         CHMs_or_detected_trees_file = Path(
             CHMs_or_detected_trees_folder, field_tree_file.name
-        )
+        ).with_suffix(".tif" if CHM_approach else ".gpkg")
 
         # Read the field trees and ensure that a projected CRS is used
         field_trees = gpd.read_file(field_tree_file)
@@ -86,14 +87,12 @@ def score_approach(
         plot_bounds.to_crs(field_trees.crs, inplace=True)
 
         if CHM_approach:
-            pass
-            # TODO, we have to decide here whether to pass the CHM path or the already opened CHM
-            # driver
+            content_to_register_to = rio.open(CHMs_or_detected_trees_file)
             # TODO add a raster-specific visualization approach
         else:
             # Read the detected trees and convert to the same CRS as the field trees
-            contnent_to_register_to = gpd.read_file(CHMs_or_detected_trees_file)
-            contnent_to_register_to.to_crs(field_trees.crs, inplace=True)
+            content_to_register_to = gpd.read_file(CHMs_or_detected_trees_file)
+            content_to_register_to.to_crs(field_trees.crs, inplace=True)
 
             # Visualize the three datasets if requested
             if vis_plots:
@@ -101,7 +100,7 @@ def score_approach(
                 plot_bounds.boundary.plot(
                     ax=ax, color="k", markersize=2, label="plot bounds"
                 )
-                contnent_to_register_to.plot(
+                content_to_register_to.plot(
                     ax=ax, c="b", markersize=2, label="detected trees"
                 )
                 field_trees.plot(ax=ax, c="r", markersize=2, label="surveyed trees")
@@ -112,11 +111,16 @@ def score_approach(
         # Run aligment
         _, estimated_shift = alignment_algorithm(
             field_trees,
-            contnent_to_register_to,
+            content_to_register_to,
             plot_bounds,
         )
         # Record shift
         all_shifts.append(estimated_shift)
+
+        if CHM_approach:
+            # In this case, content_to_register_to is an open file handler for a raster. Close it to
+            # avoid a memory leak.
+            content_to_register_to.close()
 
     all_shifts = np.array(all_shifts)
     if vis_results:
