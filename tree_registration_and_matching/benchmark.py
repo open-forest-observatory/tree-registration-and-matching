@@ -1,4 +1,3 @@
-import json
 import geopandas as gpd
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -67,10 +66,16 @@ def score_approach(
 
     all_shifts = np.array(all_shifts)
     if vis_results:
+        # Plot the x,y errors
         plt.title("Scatter plot of the errors")
         plt.scatter(all_shifts[:, 0], all_shifts[:, 1])
         plt.xlim([-10, 10])
         plt.ylim([-10, 10])
         plt.show()
+
+        # Plot the distribution of error magnitudes
+        magnitudes = np.linalg.norm(all_shifts, axis=1)
+        plt.title("Magnitudes of errors")
+        plt.hist(magnitudes)
 
     return all_shifts
