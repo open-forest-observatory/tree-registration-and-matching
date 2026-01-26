@@ -12,6 +12,7 @@ def score_approach(
     detected_tree_folder: str,
     field_tree_folder: str,
     plots_file: str,
+    alignment_algorithm=align_plot,
     vis_plots: bool = False,
     vis_results: bool = True,
 ):
@@ -59,7 +60,7 @@ def score_approach(
             plt.show()
 
         # Run aligment
-        _, estimated_shift = align_plot(
+        _, estimated_shift = alignment_algorithm(
             field_trees=field_trees, drone_trees=detected_trees, obs_bounds=plot_bounds
         )
         # Record shift
@@ -70,8 +71,8 @@ def score_approach(
         # Plot the x,y errors
         plt.title("Scatter plot of the errors")
         plt.scatter(all_shifts[:, 0], all_shifts[:, 1])
-        plt.xlim([-10, 10])
-        plt.ylim([-10, 10])
+        plt.xlim([-12, 12])
+        plt.ylim([-12, 12])
         plt.show()
 
         # Plot the distribution of error magnitudes
