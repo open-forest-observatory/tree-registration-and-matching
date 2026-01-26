@@ -198,7 +198,7 @@ def fit_euclidean_transformation(xy_mat1, xy_mat2, parameters=None):
     return theta, R_mat, t_vect, n_of_matches, feat_desc_cell_array
 
 
-def compute_feature_descriptors(xy_mat, R_local):
+def compute_feature_descriptors(xy_mat, R_local, rotate_to_characteristic: bool = True):
     """
     Helper function for constructing the feature descriptor vectors for the
     objects whose locations are listed in xy_mat.
@@ -228,16 +228,21 @@ def compute_feature_descriptors(xy_mat, R_local):
     # Finding the closest neighboring object for each object
     idx_closest = np.argmin(p_dist_mat, axis=1)
 
-    # Coordinates of the closest neighboring object
-    x_closest = x_vect[idx_closest]
-    y_closest = y_vect[idx_closest]
+    if rotate_to_characteristic:
+        # Coordinates of the closest neighboring object
+        x_closest = x_vect[idx_closest]
+        y_closest = y_vect[idx_closest]
 
-    # Compute the normalized characteristic directions
-    char_dirs = np.column_stack([x_closest - x_vect, y_closest - y_vect])
-    char_dirs = char_dirs / np.sqrt(np.sum(char_dirs**2, axis=1, keepdims=True))
+        # Compute the normalized characteristic directions
+        char_dirs = np.column_stack([x_closest - x_vect, y_closest - y_vect])
+        char_dirs = char_dirs / np.sqrt(np.sum(char_dirs**2, axis=1, keepdims=True))
 
-    # Directions perpendicular to the characteristic directions
-    perp_char_dirs = np.column_stack([-char_dirs[:, 1], char_dirs[:, 0]])
+        # Directions perpendicular to the characteristic directions
+        perp_char_dirs = np.column_stack([-char_dirs[:, 1], char_dirs[:, 0]])
+    else:
+        # Compute features relative to the original axes
+        char_dirs = np.zeros_like((xy_mat))
+        perp_char_dirs = np.ones_like((xy_mat))
 
     # Transform coordinates into local coordinate frame
     v_mat = (x_vect[:, np.newaxis] - x_vect) * char_dirs[:, 0:1] + (
@@ -335,7 +340,7 @@ def get_closest_pairs_after_transformation(xy_mat1, xy_mat2, R_mat, t_vect, r_th
     return from_idx2_to_closest_idx1, from_idx2_to_min_dist1, n_of_matches
 
 
-def align_plot_hyyppa(field_trees, detected_trees):
+def align_plot_hyyppa(field_trees, detected_trees, vis: bool = False):
     original_field_CRS = field_trees.crs
     # Transform the drone trees to a cartesian CRS if not already
     field_trees = ensure_projected_CRS(field_trees)
@@ -368,11 +373,15 @@ def align_plot_hyyppa(field_trees, detected_trees):
             transform_inv[1, 2],
         ]
     )
-    f, ax = plt.subplots()
 
-    field_trees.plot(ax=ax, c="b", label="field trees")
-    field_trees_shifted.plot(ax=ax, c="r", label="field trees shifted")
-    plt.show()
+    if vis:
+        f, ax = plt.subplots()
+
+        # field_trees.plot(ax=ax, c="b", label="field trees")
+        detected_trees.plot(ax=ax, c="b", label="detected trees")
+        field_trees_shifted.plot(ax=ax, c="r", label="field trees shifted")
+        plt.legend()
+        plt.show()
 
     field_trees_shifted.to_crs(original_field_CRS)
     return field_trees_shifted
@@ -380,7 +389,8 @@ def align_plot_hyyppa(field_trees, detected_trees):
 
 # Example usage
 if __name__ == "__main__":
-    dataset = "0008_000256_000254"
+    dataset = "0016_000284_000280"
+
     field_trees = gpd.read_file(
         f"/ofo-share/repos/david/tree-registration-and-matching/data/ofo-example-2/field_trees/{dataset}.gpkg"
     )
