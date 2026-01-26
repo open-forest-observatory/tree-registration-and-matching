@@ -15,17 +15,50 @@ def score_approach(
     alignment_algorithm=align_plot,
     vis_plots: bool = False,
     vis_results: bool = True,
-):
+) -> np.array:
+    """Assess the quality of the shift on a set of plots.
+
+    Args:
+        detected_tree_folder (str):
+            The folder of geospatial files representing detected tree tops, one per plot.
+        field_tree_folder (str):
+            The folder of geospatial files representing the surveyed trees, one per plot. The files
+            this folder should be named identically to those in `detected_tree_folder`.
+        plots_file (str):
+            A path to a geopackage file with geometry representing the surveyed area. The 'plot_id'
+            field represents which of the paired (detected/field) tree files it corresponds to,
+            without the file extension.
+        alignment_algorithm (function, optional):
+            A function which aligns the field and detected trees. The second return argument should
+            be the (x, y) shift. Defaults to align_plot.
+        vis_plots (bool, optional):
+            Should each plot be shown. Defaults to False.
+        vis_results (bool, optional):
+            Should the offset from true shifts be visualized. Defaults to True.
+
+    Raises:
+        ValueError:
+            If the detected and field tree folders do not have the same number of files with the
+            same names.
+
+    Returns:
+        np.array: The error for each plot, ordered by the sorted plot IDs.
+    """
     # Read all the plot bounds
     all_plot_bounds = gpd.read_file(plots_file)
 
     # List all the files in both input folders
-    detected_tree_files = list(detected_tree_folder.glob("*.gpkg"))
-    field_tree_files = list(field_tree_folder.glob("*.gpkg"))
+    detected_tree_files = sorted(detected_tree_folder.glob("*.gpkg"))
+    field_tree_files = sorted(field_tree_folder.glob("*.gpkg"))
 
     # Ensure there are the same number of files
     if len(detected_tree_files) != len(field_tree_files):
         raise ValueError("Different number of files")
+
+    if set([f.stem for f in detected_tree_files]) != set(
+        [f.stem for f in field_tree_files]
+    ):
+        raise ValueError("Different filenames")
 
     # Record the shifts
     all_shifts = []
@@ -56,6 +89,7 @@ def score_approach(
             )
             detected_trees.plot(ax=ax, c="b", markersize=2, label="detected trees")
             field_trees.plot(ax=ax, c="r", markersize=2, label="surveyed trees")
+            plt.title(f"Visualization for {plot_id}")
             plt.legend()
             plt.show()
 
