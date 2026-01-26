@@ -137,6 +137,10 @@ def fit_euclidean_transformation(xy_mat1, xy_mat2, parameters=None):
         theta_sign = np.sign(np.sum(cross_prod * np.array([0, 0, 1])))
         theta = theta_magn * theta_sign
 
+        # Set the rotation to zero
+        # TODO fix this
+        theta = 0
+
         # The corresponding rotation matrix
         R_mat = np.array(
             [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
@@ -198,7 +202,9 @@ def fit_euclidean_transformation(xy_mat1, xy_mat2, parameters=None):
     return theta, R_mat, t_vect, n_of_matches, feat_desc_cell_array
 
 
-def compute_feature_descriptors(xy_mat, R_local, rotate_to_characteristic: bool = True):
+def compute_feature_descriptors(
+    xy_mat, R_local, rotate_to_characteristic: bool = False
+):
     """
     Helper function for constructing the feature descriptor vectors for the
     objects whose locations are listed in xy_mat.
@@ -389,7 +395,7 @@ def align_plot_hyyppa(field_trees, detected_trees, vis: bool = False):
 
 # Example usage
 if __name__ == "__main__":
-    dataset = "0016_000284_000280"
+    dataset = "0159_000211_000220"
 
     field_trees = gpd.read_file(
         f"/ofo-share/repos/david/tree-registration-and-matching/data/ofo-example-2/field_trees/{dataset}.gpkg"
@@ -397,7 +403,7 @@ if __name__ == "__main__":
     detected_trees = gpd.read_file(
         f"/ofo-share/repos/david/tree-registration-and-matching/data/ofo-example-2/detected-trees/{dataset}.gpkg"
     )
-    align_plot_hyyppa(field_trees, detected_trees)
+    align_plot_hyyppa(field_trees, detected_trees, vis=True)
 
     # Create synthetic test data
     np.random.seed(42)
