@@ -9,37 +9,37 @@ from tree_registration_and_matching.utils import ensure_projected_CRS
 
 
 def score_approach(
-    detected_tree_folder,
-    field_tree_folder,
-    plots_file,
-    shifts_file,
-    vis_plots=False,
-    vis_results=True,
+    detected_tree_folder: str,
+    field_tree_folder: str,
+    plots_file: str,
+    vis_plots: bool = False,
+    vis_results: bool = True,
 ):
-    # TODO what would be the most robust way to set this up
-    with open(shifts_file) as infile:
-        shifts = json.load(infile)
-
+    # Read all the plot bounds
     all_plot_bounds = gpd.read_file(plots_file)
 
+    # List all the files in both input folders
     detected_tree_files = list(detected_tree_folder.glob("*.gpkg"))
     field_tree_files = list(field_tree_folder.glob("*.gpkg"))
 
+    # Ensure there are the same number of files
     if len(detected_tree_files) != len(field_tree_files):
         raise ValueError("Different number of files")
 
+    # Record the shifts
     all_shifts = []
 
+    # Iterate over files
     for detected_tree_file in detected_tree_files:
+        # The field tree should have the same filename (different folder)
         field_tree_file = Path(field_tree_folder, detected_tree_file.name)
 
+        # Read both files
         field_trees = gpd.read_file(field_tree_file)
         detected_trees = gpd.read_file(detected_tree_file)
 
         # Dataset name
-        dataset_name = detected_tree_file.stem
-        shift = shifts[dataset_name][0]
-        plot_id = dataset_name[:4]
+        plot_id = detected_tree_file.stem[:4]
         plot_bounds = all_plot_bounds.query("plot_id == @plot_id")
 
         # Make sure the two datasets have the same CRS and it's meters-based
@@ -47,9 +47,7 @@ def score_approach(
         detected_trees.to_crs(field_trees.crs, inplace=True)
         plot_bounds.to_crs(field_trees.crs, inplace=True)
 
-        # Apply the shift because it was recorded relative to the un-shifted field trees
-        plot_bounds.geometry = plot_bounds.translate(xoff=shift[0], yoff=shift[1])
-
+        # Visualize the three datasets if requested
         if vis_plots:
             f, ax = plt.subplots()
             plot_bounds.boundary.plot(
@@ -60,15 +58,19 @@ def score_approach(
             plt.legend()
             plt.show()
 
+        # Run aligment
         _, estimated_shift = align_plot(
             field_trees=field_trees, drone_trees=detected_trees, obs_bounds=plot_bounds
         )
+        # Record shift
         all_shifts.append(estimated_shift)
 
     all_shifts = np.array(all_shifts)
-
     if vis_results:
+        plt.title("Scatter plot of the errors")
         plt.scatter(all_shifts[:, 0], all_shifts[:, 1])
         plt.xlim([-10, 10])
         plt.ylim([-10, 10])
         plt.show()
+
+    return all_shifts
