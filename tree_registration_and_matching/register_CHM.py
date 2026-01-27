@@ -162,6 +162,7 @@ def find_best_shift(
         y_range (tuple or array): Same as x_range but for y offsets.
 
     Returns:
+        np.ndarray: (x, y) shift
         dict: {
             'best_shift': (dx, dy),
             'best_correlation': float,
@@ -231,11 +232,11 @@ def find_best_shift(
             vis=vis,
         )
 
-    return {
+    return best_shift, {
         "best_shift": best_shift,
         "best_correlation": float(best_metric) if not np.isnan(best_metric) else np.nan,
         "correlations_img": metrics_img,
         "x_vals": x_vals,
         "y_vals": y_vals,
         "ratio": ratio,
-    }, best_shift
+    }

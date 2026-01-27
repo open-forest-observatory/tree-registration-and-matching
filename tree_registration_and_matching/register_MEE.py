@@ -162,7 +162,7 @@ def align_plot(field_trees, drone_trees, obs_bounds, height_column="height", vis
     # Convert back to the original CRS
     shifted_field_trees.to_crs(original_field_CRS, inplace=True)
 
-    return shifted_field_trees, fine_shift
+    return fine_shift, shifted_field_trees
 
 
 if __name__ == "__main__":

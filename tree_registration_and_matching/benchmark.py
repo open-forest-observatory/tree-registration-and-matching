@@ -194,11 +194,13 @@ def score_approach(
         # Run aligment
         # TODO determine if this should get the plot bounds anymore since cropping already happens
         # in this driver code.
-        _, estimated_shift = alignment_algorithm(
+        alignment_results = alignment_algorithm(
             field_trees,
             content_to_register_to,
             plot_bounds,
         )
+        # The algorithm should return the (x, y) shift as the first of potentially-many arguments
+        estimated_shift = alignment_results[0]
         # Record shift
         all_shifts.append(estimated_shift)
 
