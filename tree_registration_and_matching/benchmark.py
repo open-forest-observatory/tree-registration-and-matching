@@ -17,6 +17,8 @@ def score_approach(
     CHM_approach: bool = False,
     vis_plots: bool = False,
     vis_results: bool = True,
+    crop_to_plot_bounds: bool = False,
+    buffer_distance: float = 0.0,
 ) -> np.array:
     """Assess the quality of the shift on a set of plots.
 
@@ -41,6 +43,10 @@ def score_approach(
             Should each plot be shown. Defaults to False.
         vis_results (bool, optional):
             Should the offset from true shifts be visualized. Defaults to True.
+        crop_to_plot_bounds (bool, optional):
+            Whether to crop the detected trees to the plot bounds area. Defaults to False.
+        buffer_distance (float, optional):
+            Buffer distance around the plot bounds to include when cropping. Defaults to 0.0.
 
     Raises:
         ValueError:
@@ -93,6 +99,14 @@ def score_approach(
             # Read the detected trees and convert to the same CRS as the field trees
             content_to_register_to = gpd.read_file(CHMs_or_detected_trees_file)
             content_to_register_to.to_crs(field_trees.crs, inplace=True)
+
+            # Crop to plot bounds if requested
+            if crop_to_plot_bounds:
+                buffered_bounds = plot_bounds.copy()
+                buffered_bounds.geometry = buffered_bounds.buffer(buffer_distance)
+                content_to_register_to = gpd.clip(
+                    content_to_register_to, buffered_bounds
+                )
 
             # Visualize the three datasets if requested
             if vis_plots:
