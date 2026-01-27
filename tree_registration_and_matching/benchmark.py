@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import rasterio as rio
+from rasterio.plot import show
 from rasterio.mask import mask
 from rasterio.io import MemoryFile
 import geopandas as gpd
@@ -20,8 +21,7 @@ def score_approach(
     vis_plots: bool = False,
     vis_results: bool = True,
     crop_to_plot_bounds: bool = False,
-    buffer_distance: float = 0.0,
-    mask_chm_outside_bounds: bool = False,
+    plot_buffer_distance: float = 0.0,
 ) -> np.array:
     """Assess the quality of the shift on a set of plots.
 
@@ -47,11 +47,13 @@ def score_approach(
         vis_results (bool, optional):
             Should the offset from true shifts be visualized. Defaults to True.
         crop_to_plot_bounds (bool, optional):
-            Whether to crop the detected trees to the plot bounds area. Defaults to False.
-        buffer_distance (float, optional):
+            Whether the content to register to should be cropped to a buffered version of the plot
+            bounds. The buffer distance is defined by `plot_buffer_distance`. In the case of using
+            tree locations as input, all trees outside of the area are removed prior to registration.
+            If using a CHM input, all regions of the CHM outside the crop are set to the datasets'
+            nadata attribute.
+        plot_buffer_distance (float, optional):
             Buffer distance around the plot bounds to include when cropping. Defaults to 0.0.
-        mask_chm_outside_bounds (bool, optional):
-            Whether to mask the CHM outside the buffered plot bounds by setting to nodata. Defaults to False.
 
     Raises:
         ValueError:
@@ -100,13 +102,15 @@ def score_approach(
         if CHM_approach:
             content_to_register_to = rio.open(CHMs_or_detected_trees_file)
             # Mask CHM outside plot bounds if requested
-            if mask_chm_outside_bounds:
+            if crop_to_plot_bounds:
                 # Create a buffered geometry from plot bounds to include areas slightly outside
                 # the exact plot boundaries, based on the specified buffer_distance
-                buffered_geom = plot_bounds.buffer(buffer_distance).unary_union
+                buffered_geom = plot_bounds.buffer(plot_buffer_distance).union_all()
 
                 # Use rasterio's mask function to set all pixels outside the buffered geometry
-                # to the raster's nodata value, effectively masking irrelevant terrain data
+                # to the raster's nodata value, effectively masking irrelevant terrain data.
+                # Note that this may make the dimensions of the raster smaller, which is why the
+                # new transform must be recorded.
                 masked_data, masked_transform = mask(
                     content_to_register_to,
                     [buffered_geom],
@@ -132,7 +136,15 @@ def score_approach(
 
                 # Write the masked data to the in-memory raster
                 content_to_register_to.write(masked_data)
-            # TODO add a raster-specific visualization approach
+
+            if vis_plots:
+                _, ax = plt.subplots()
+                # Read and show the first band of the raster. If we want to support approaches for
+                # multiband rasters, this would need to be updated.
+                show(content_to_register_to.read(1), ax=ax, cmap="viridis")
+                ax.set_title(f"CHM for plot {plot_id}")
+                ax.axis("off")
+                plt.show()
         else:
             # Read the detected trees and convert to the same CRS as the field trees
             content_to_register_to = gpd.read_file(CHMs_or_detected_trees_file)
@@ -141,7 +153,7 @@ def score_approach(
             # Crop to plot bounds if requested
             if crop_to_plot_bounds:
                 buffered_bounds = plot_bounds.copy()
-                buffered_bounds.geometry = buffered_bounds.buffer(buffer_distance)
+                buffered_bounds.geometry = buffered_bounds.buffer(plot_buffer_distance)
                 content_to_register_to = gpd.clip(
                     content_to_register_to, buffered_bounds
                 )
@@ -161,6 +173,8 @@ def score_approach(
                 plt.show()
 
         # Run aligment
+        # TODO determine if this should get the plot bounds anymore since cropping already happens
+        # in this driver code.
         _, estimated_shift = alignment_algorithm(
             field_trees,
             content_to_register_to,
