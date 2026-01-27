@@ -91,7 +91,6 @@ def score_approach(
 
         # Read the field trees and ensure that a projected CRS is used
         field_trees = gpd.read_file(field_tree_file)
-        field_trees = ensure_projected_CRS(field_trees)
 
         # Read the plot name and extract the plot bounds for this dataset
         # TODO, make optional
@@ -101,6 +100,17 @@ def score_approach(
 
         if CHM_approach:
             content_to_register_to = rio.open(CHMs_or_detected_trees_file)
+            if not content_to_register_to.crs.is_projected:
+                raise ValueError(
+                    "Raster does not have a projected CRS. This may cause errors in registration algorithms."
+                )
+            # Ensure the plot bounds and field trees are in the same CRS as the raster, since the
+            # raster cannot be reprojected without data loss.
+            # TODO all shifts reported by the registration algorithm will be relative to the CRS of
+            # the raster data, which should be addressed at some point for consistency.
+            plot_bounds.to_crs(content_to_register_to.crs, inplace=True)
+            field_trees.to_crs(content_to_register_to.crs, inplace=True)
+
             # Mask CHM outside plot bounds if requested
             if crop_to_plot_bounds:
                 # Create a buffered geometry from plot bounds to include areas slightly outside
@@ -141,11 +151,20 @@ def score_approach(
                 _, ax = plt.subplots()
                 # Read and show the first band of the raster. If we want to support approaches for
                 # multiband rasters, this would need to be updated.
-                show(content_to_register_to.read(1), ax=ax, cmap="viridis")
+                cb = show(content_to_register_to.read(1), ax=ax, cmap="viridis")
+                plt.colorbar(cb, ax=ax, label="Height (m)")
+                # Show the plot bounds
+                # The rasterio visualization is in pixel coordinates, so we must transform the
+                # geospatial data of the plot bounds to match it.
+                transform = content_to_register_to.transform.__invert__().to_shapely()
+                plot_bounds.affine_transform(transform).plot(
+                    ax=ax, facecolor="none", edgecolor="cyan", linewidth=3
+                )
                 ax.set_title(f"CHM for plot {plot_id}")
-                ax.axis("off")
                 plt.show()
         else:
+            # Ensure that the field trees are in a projected (meters-based) CRS
+            field_trees = ensure_projected_CRS(field_trees)
             # Read the detected trees and convert to the same CRS as the field trees
             content_to_register_to = gpd.read_file(CHMs_or_detected_trees_file)
             content_to_register_to.to_crs(field_trees.crs, inplace=True)
