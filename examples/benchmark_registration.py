@@ -61,7 +61,7 @@ if VIS:
     MEE_errors = np.linalg.norm(MEE_shifts, axis=1)
 
     plt.title("MEE error magnitudes vs. CHM error magnitudes")
-    plt.scatter(MEE_errors, CHM_errors[:3])
+    plt.scatter(MEE_errors, CHM_errors)
     plt.xlabel("MEE error magnitudes")
     plt.ylabel("CHM error magnitudes")
     plt.xlim(0, np.sqrt(2) * 12)
