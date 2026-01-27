@@ -1,3 +1,4 @@
+import typing
 from itertools import product
 
 import geopandas as gpd
@@ -5,7 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import rasterio as rio
 import shapely
-import typing
 from skimage.filters import gaussian
 from skimage.segmentation import watershed
 

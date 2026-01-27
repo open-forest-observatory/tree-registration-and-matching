@@ -1,10 +1,11 @@
 from pathlib import Path
-import numpy as np
-from tree_registration_and_matching.constants import DATA_DIR
-from tree_registration_and_matching.benchmark import score_approach
-from tree_registration_and_matching.register_CHM import find_best_shift
-import matplotlib.pyplot as plt
 
+import matplotlib.pyplot as plt
+import numpy as np
+
+from tree_registration_and_matching.benchmark import score_approach
+from tree_registration_and_matching.constants import DATA_DIR
+from tree_registration_and_matching.register_CHM import find_best_shift
 
 DETECTED_TREES = Path(DATA_DIR, "ofo-example-2", "detected-trees")
 CHMS = Path(DATA_DIR, "ofo-example-2", "CHMs")

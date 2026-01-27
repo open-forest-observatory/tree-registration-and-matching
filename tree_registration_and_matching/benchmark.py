@@ -1,12 +1,12 @@
 from pathlib import Path
 
-import rasterio as rio
-from rasterio.plot import show
-from rasterio.mask import mask
-from rasterio.io import MemoryFile
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
+import rasterio as rio
+from rasterio.io import MemoryFile
+from rasterio.mask import mask
+from rasterio.plot import show
 
 from tree_registration_and_matching.register_MEE import align_plot
 from tree_registration_and_matching.utils import ensure_projected_CRS
