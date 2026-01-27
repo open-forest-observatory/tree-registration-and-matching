@@ -1,6 +1,8 @@
 from pathlib import Path
 
 import rasterio as rio
+from rasterio.mask import mask
+from rasterio.io import MemoryFile
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,6 +21,7 @@ def score_approach(
     vis_results: bool = True,
     crop_to_plot_bounds: bool = False,
     buffer_distance: float = 0.0,
+    mask_chm_outside_bounds: bool = False,
 ) -> np.array:
     """Assess the quality of the shift on a set of plots.
 
@@ -47,6 +50,8 @@ def score_approach(
             Whether to crop the detected trees to the plot bounds area. Defaults to False.
         buffer_distance (float, optional):
             Buffer distance around the plot bounds to include when cropping. Defaults to 0.0.
+        mask_chm_outside_bounds (bool, optional):
+            Whether to mask the CHM outside the buffered plot bounds by setting to nodata. Defaults to False.
 
     Raises:
         ValueError:
@@ -94,6 +99,39 @@ def score_approach(
 
         if CHM_approach:
             content_to_register_to = rio.open(CHMs_or_detected_trees_file)
+            # Mask CHM outside plot bounds if requested
+            if mask_chm_outside_bounds:
+                # Create a buffered geometry from plot bounds to include areas slightly outside
+                # the exact plot boundaries, based on the specified buffer_distance
+                buffered_geom = plot_bounds.buffer(buffer_distance).unary_union
+
+                # Use rasterio's mask function to set all pixels outside the buffered geometry
+                # to the raster's nodata value, effectively masking irrelevant terrain data
+                masked_data, masked_transform = mask(
+                    content_to_register_to,
+                    [buffered_geom],
+                    crop=True,
+                    nodata=content_to_register_to.nodata,
+                )
+
+                # Get the original raster's profile and update it with the new dimensions
+                # and transform from the masking operation
+                profile = content_to_register_to.profile
+                profile.update(
+                    height=masked_data.shape[1],
+                    width=masked_data.shape[2],
+                    transform=masked_transform,
+                )
+
+                # Close the original raster file handler to prevent memory leaks
+                content_to_register_to.close()
+
+                # Create an in-memory raster file to hold the masked data
+                memfile = MemoryFile()
+                content_to_register_to = memfile.open(**profile)
+
+                # Write the masked data to the in-memory raster
+                content_to_register_to.write(masked_data)
             # TODO add a raster-specific visualization approach
         else:
             # Read the detected trees and convert to the same CRS as the field trees
