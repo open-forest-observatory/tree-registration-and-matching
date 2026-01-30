@@ -100,14 +100,12 @@ if VIS:
     plt.show()
 
     plt.title("MEE error magnitudes vs. CHM error magnitudes")
-    plt.scatter(MEE_errors, CHM_errors)
+    plt.scatter(MEE_errors, CHM_errors, alpha=0.5)
 
     # Compute trend line between MEE and CHM errors
     z = np.polyfit(MEE_errors, CHM_errors, 1)
     p = np.poly1d(z)
     x_trend = np.linspace(MEE_errors.min(), MEE_errors.max(), 100)
-    print(x_trend)
-    print(p(x_trend))
     plt.plot(x_trend, p(x_trend), "r--", label=f"Trend line: y={z[0]:.2f}x+{z[1]:.2f}")
 
     plt.xlabel("MEE error magnitudes")
@@ -119,8 +117,8 @@ if VIS:
 
     # Show the x, y coordinates of the errors for the two approaches on separate subplots
     f, ax = plt.subplots(1, 2)
-    ax[0].scatter(MEE_shifts[:, 0], MEE_shifts[:, 1])
-    ax[1].scatter(CHM_shifts[:, 0], CHM_shifts[:, 1])
+    ax[0].scatter(MEE_shifts[:, 0], MEE_shifts[:, 1], alpha=0.2)
+    ax[1].scatter(CHM_shifts[:, 0], CHM_shifts[:, 1], alpha=0.2)
 
     ax[0].set_xlim((-12.5, 12.5))
     ax[0].set_ylim((-12.5, 12.5))
