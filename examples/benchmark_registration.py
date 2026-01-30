@@ -59,6 +59,7 @@ if RUN_CHM:
         crop_to_plot_bounds=True,
         plot_buffer_distance=10,
         vis_plots=False,
+        n_workers=24,
     )
     np.save(
         OUTPUT_CHM,
