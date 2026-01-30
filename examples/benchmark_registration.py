@@ -73,6 +73,20 @@ if VIS:
     CHM_errors = np.linalg.norm(CHM_shifts, axis=1)
     MEE_errors = np.linalg.norm(MEE_shifts, axis=1)
 
+    errors = np.array([MEE_errors, CHM_errors]).T
+    colors = ["red", "blue"]
+    # Show histograms
+    plt.hist(
+        errors,
+        bins=np.linspace(0, 12 * np.sqrt(2), 20),
+        histtype="bar",
+        label=["MEE", "CHM"],
+    )
+    plt.legend()
+    plt.title("Paired histogram")
+    plt.xlabel("Errors from true shift (m)")
+    plt.show()
+
     plt.title("MEE error magnitudes vs. CHM error magnitudes")
     plt.scatter(MEE_errors, CHM_errors)
 
