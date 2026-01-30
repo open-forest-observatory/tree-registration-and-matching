@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -67,16 +68,19 @@ if RUN_CHM:
 if VIS:
     field_trees = sorted(FIELD_TREES.glob("*"))
     datasets = [str(f.stem) + ".tif" for f in field_trees]
+    counts = [len(gpd.read_file(f)) for f in field_trees]
 
     quality = pd.read_csv(QUALITY_FILE)
     quality = quality[quality.Dataset.isin(datasets)]
     high_quality = (quality.Quality >= 3).values
+    high_counts = np.array(counts) > 10
+    high_counts_and_quality = np.logical_and(high_counts, high_quality)
 
     CHM_shifts = np.load(OUTPUT_CHM)
     MEE_shifts = np.load(OUTPUT_MEE)
 
-    CHM_shifts = CHM_shifts[high_quality]
-    MEE_shifts = MEE_shifts[high_quality]
+    CHM_shifts = CHM_shifts[high_counts_and_quality]
+    MEE_shifts = MEE_shifts[high_counts_and_quality]
 
     # Replace nans with the worst value
     CHM_shifts = np.nan_to_num(CHM_shifts, nan=12)
