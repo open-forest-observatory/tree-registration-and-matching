@@ -2,6 +2,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 from tree_registration_and_matching.benchmark import score_approach
 from tree_registration_and_matching.constants import DATA_DIR
@@ -11,6 +12,7 @@ DETECTED_TREES = Path(DATA_DIR, "ofo-example-2", "detected-trees")
 CHMS = Path(DATA_DIR, "ofo-example-2", "CHMs")
 FIELD_TREES = Path(DATA_DIR, "ofo-example-2", "field_trees")
 PLOTS_FILE = Path(DATA_DIR, "ofo-example-2", "ofo_ground-reference_plots.gpkg")
+QUALITY_FILE = Path(DATA_DIR, "ofo-example-2", "shift_quality.csv")
 
 OUTPUT_FOLDER = Path(DATA_DIR, "benchmarking_results")
 OUTPUT_CHM = Path(OUTPUT_FOLDER, "shifts_CHM.npy")
@@ -63,8 +65,18 @@ if RUN_CHM:
     )
 
 if VIS:
+    field_trees = sorted(FIELD_TREES.glob("*"))
+    datasets = [str(f.stem) + ".tif" for f in field_trees]
+
+    quality = pd.read_csv(QUALITY_FILE)
+    quality = quality[quality.Dataset.isin(datasets)]
+    high_quality = (quality.Quality >= 3).values
+
     CHM_shifts = np.load(OUTPUT_CHM)
     MEE_shifts = np.load(OUTPUT_MEE)
+
+    CHM_shifts = CHM_shifts[high_quality]
+    MEE_shifts = MEE_shifts[high_quality]
 
     # Replace nans with the worst value
     CHM_shifts = np.nan_to_num(CHM_shifts, nan=12)
