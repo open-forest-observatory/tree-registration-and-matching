@@ -1,6 +1,7 @@
 import geopandas as gpd
 import numpy as np
 import pyproj
+import shapely
 
 from tree_registration_and_matching.constants import LAT_LON_CRS
 
@@ -60,3 +61,48 @@ def cdist(x, y):
     pairwise_distances = np.sqrt(np.sum((x_reshaped - y_reshaped) ** 2, axis=2))
 
     return pairwise_distances
+
+
+def is_overstory(tree_dataset: gpd.GeoDataFrame, heights_column="height"):
+    """
+    Compute which trees are in the overstory based on heights and locations
+    https://github.com/open-forest-observatory/ofo-itd-crossmapping/blob/1c35bb20f31013527c35bc56ab7bf5ef5ab1aa72/workflow/30_evaluate-predicted-trees.R#L90
+
+    Args:
+        tree_dataset (gpd.GeoDataFrame): The trees represented as points with a height column
+
+    Returns:
+        np.array: binary array representing which trees are overstory
+    """
+    heights = tree_dataset[heights_column].values
+
+    # If no trees are present, return an empty index
+    if len(tree_dataset) == 0:
+        return np.array([], dtype=bool)
+
+    # Compute the difference in heights between different trees. This is the j axis minus the one on
+    # the i axis
+    height_diffs = heights[np.newaxis, :] - heights[:, np.newaxis]
+
+    # Get a numpy array of coordinates
+    tree_points = shapely.get_coordinates(tree_dataset.geometry)
+
+    # Compute the distances between each tree
+    dists = cdist(tree_points, tree_points)
+
+    # Compute the threshold distance for tree based on the difference in height
+    dist_threshold = height_diffs * 0.1 + 1
+
+    # Is the tree on the i axis within the threshold distance
+    is_within_threshold = dists < dist_threshold
+
+    # Is the tree on the i axis shorter than the one on the j axis
+    is_shorter = height_diffs > 0
+
+    # Are both conditions met
+    shorter_and_under_threshold = np.logical_and(is_within_threshold, is_shorter)
+
+    # Is the tree not occluded by any other trees
+    is_overstory = np.logical_not(np.any(shorter_and_under_threshold, axis=1))
+
+    return is_overstory
