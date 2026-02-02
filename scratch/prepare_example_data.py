@@ -24,6 +24,10 @@ all_plot_bounds = gpd.read_file(PLOT_BOUNDS).to_crs(crs=26910)
 with open(SHIFTS) as infile:
     shifts = json.load(infile)
 
+# Drop dead trees
+live_trees = all_field_trees.live_dead != "D"
+all_field_trees = all_field_trees[live_trees]
+
 output_plot_bounds = []
 output_field_trees = []
 
