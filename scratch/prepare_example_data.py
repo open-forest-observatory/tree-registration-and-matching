@@ -18,6 +18,21 @@ SHIFTS = Path(
 OUTPUT_PLOT_BOUNDS = "/ofo-share/repos/david/tree-registration-and-matching/data/benchmarking-data/plot_bounds.gpkg"
 OUTPUT_FIELD_TREES = "/ofo-share/repos/david/tree-registration-and-matching/data/benchmarking-data/field_trees.gpkg"
 
+## Prep shift quality
+shift_quality = pd.read_csv(
+    "/ofo-share/repos/david/tree-registration-and-matching/data/ofo-example-2/shift_quality.csv"
+)
+shift_quality.Dataset = shift_quality.Dataset.str.replace(".tif", "")
+shift_quality_dict = {
+    k: v
+    for k, v in zip(shift_quality.Dataset.to_list(), shift_quality.Quality.to_list())
+}
+with open(
+    "/ofo-share/repos/david/tree-registration-and-matching/data/benchmarking-data/shift_quality.json",
+    "w",
+) as infile:
+    json.dump(shift_quality_dict, infile)
+
 all_field_trees = gpd.read_file(FIELD_TREES).to_crs(crs=26910)
 all_plot_bounds = gpd.read_file(PLOT_BOUNDS).to_crs(crs=26910)
 
