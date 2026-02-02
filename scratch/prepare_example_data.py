@@ -42,11 +42,12 @@ for dataset_id, v in shifts.items():
 
     field_trees = field_trees[overstory]
 
+    plot_bounds["dataset_id"] = dataset_id
+    field_trees["dataset_id"] = dataset_id
+
     output_plot_bounds.append(plot_bounds)
     output_field_trees.append(field_trees)
 
-    output_plot_bounds["dataset_id"] = dataset_id
-    output_field_trees["dataset_id"] = dataset_id
 
 output_plot_bounds = gpd.GeoDataFrame(pd.concat(output_plot_bounds), crs=26910)
 output_field_trees = gpd.GeoDataFrame(pd.concat(output_field_trees), crs=26910)
