@@ -15,6 +15,8 @@ CHMS = Path(DATA_DIR, "ofo-tree-registration", "CHMs")
 FIELD_TREES = Path(DATA_DIR, "ofo-tree-registration", "field_trees.gpkg")
 PLOTS_FILE = Path(DATA_DIR, "ofo-tree-registration", "plot_bounds.gpkg")
 QUALITY_FILE = Path(DATA_DIR, "ofo-tree-registration", "shift_quality.json")
+SHIFT_FILE = Path(DATA_DIR, "ofo-tree-registration", "shifts_per_dataset.json")
+SHIFT_CRS = 26910
 
 OUTPUT_FOLDER = Path(DATA_DIR, "benchmarking_results")
 OUTPUT_CHM = Path(OUTPUT_FOLDER, "shifts_CHM.npy")
@@ -26,16 +28,29 @@ RUN_MEE = True
 RUN_CHM = True
 VIS = True
 
+# An m3.2xl node has 64 CPU cores
+N_WORKERS = 60
+
+with open(SHIFT_FILE) as infile:
+    shifts = json.load(infile)
+    # Negate the shift because the convention is it should be what is applied to the field trees
+    shifts = {k: -np.array(v) for k, v in shifts.items()}
+    # This is what we hope the algorithm reports, the opposite of the applied shift, ordered by
+    # dataset ID
+    target_shifts = np.concat([-shifts[k] for k in sorted(shifts.keys())], axis=0)
+
 if RUN_MEE:
     shifts_MEE = score_approach(
         DETECTED_TREES,
         FIELD_TREES,
         PLOTS_FILE,
+        shifts=shifts,
+        shift_CRS=SHIFT_CRS,
         vis_results=False,
         crop_to_plot_bounds=True,
         plot_buffer_distance=10,
         CHM_approach=False,
-        n_workers=60,
+        n_workers=N_WORKERS,
     )
     np.save(
         OUTPUT_MEE,
@@ -57,12 +72,14 @@ if RUN_CHM:
         field_trees_file=FIELD_TREES,
         CHMs_or_detected_trees=CHMS,
         plots_file=PLOTS_FILE,
+        shifts=shifts,
+        shift_CRS=SHIFT_CRS,
         alignment_algorithm=find_best_shift_specialized,
         CHM_approach=True,
         crop_to_plot_bounds=True,
         plot_buffer_distance=10,
         vis_plots=False,
-        n_workers=60,
+        n_workers=N_WORKERS,
     )
     np.save(
         OUTPUT_CHM,
@@ -91,15 +108,20 @@ if VIS:
     CHM_shifts = np.load(OUTPUT_CHM)
     MEE_shifts = np.load(OUTPUT_MEE)
 
-    CHM_shifts = CHM_shifts[high_counts_and_quality]
-    MEE_shifts = MEE_shifts[high_counts_and_quality]
+    # The signs of these two are opposite so we just add them together
+    CHM_errors = CHM_shifts + target_shifts
+    MEE_errors = MEE_shifts + target_shifts
+
+    # Subset to the high quality and high count plots
+    CHM_errors = CHM_errors[high_counts_and_quality]
+    MEE_errors = MEE_errors[high_counts_and_quality]
 
     # Replace nans with the worst value
-    CHM_shifts = np.nan_to_num(CHM_shifts, nan=12)
+    CHM_errors = np.nan_to_num(CHM_errors, nan=12)
 
     # Show the magtides of the error for indivdual plots with the two approaches
-    CHM_errors = np.linalg.norm(CHM_shifts, axis=1)
-    MEE_errors = np.linalg.norm(MEE_shifts, axis=1)
+    CHM_errors = np.linalg.norm(CHM_errors, axis=1)
+    MEE_errors = np.linalg.norm(MEE_errors, axis=1)
 
     errors = np.array([MEE_errors, CHM_errors]).T
     colors = ["red", "blue"]

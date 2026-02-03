@@ -142,6 +142,8 @@ def score_approach(
     field_trees_file: str,
     CHMs_or_detected_trees: str,
     plots_file: str,
+    shifts: dict,
+    shift_CRS,
     alignment_algorithm=align_plot,
     CHM_approach: bool = False,
     vis_plots: bool = False,
@@ -166,6 +168,11 @@ def score_approach(
             A path to a geopackage file with geometry representing the surveyed area. The 'plot_id'
             field represents which dataset (field trees plus CHMs or detected trees) files it
             corresponds to. Note that the plot_id field will not contain file extension.
+        shifts (dict):
+            A dictionary mapping from dataset to a (x, y) shift to apply to the field trees and
+            plot bounds.
+        shifts_CRS (CRS):
+            The data should be converted this CRS prior to translation.
         alignment_algorithm (function, optional):
             A function which aligns the field and detected trees. The second return argument should
             be the (x, y) shift. Defaults to align_plot.
@@ -195,9 +202,9 @@ def score_approach(
         np.array: The error for each plot, ordered by the sorted plot IDs.
     """
 
-    # Read all the plot bounds
-    all_plot_bounds = gpd.read_file(plots_file)
-    all_field_trees = gpd.read_file(field_trees_file)
+    # Read all the plot bounds and trees
+    all_plot_bounds = gpd.read_file(plots_file).to_crs(shift_CRS)
+    all_field_trees = gpd.read_file(field_trees_file).to_crs(shift_CRS)
 
     # Unique dataset IDs
     dataset_IDs = sorted(all_field_trees.dataset_id.unique())
@@ -226,10 +233,21 @@ def score_approach(
     plot_bounds_list = []
     # Iterate over files to extract plot bounds corresponding to each
     for dataset_id in dataset_IDs:
+        # Find the corresponding shift
+        shift = shifts[dataset_id][0]
+
+        # Subset to the specified dataset
+        plot_bounds = all_plot_bounds.query("dataset_id == @dataset_id")
+        field_trees = all_field_trees.query("dataset_id == @dataset_id")
+
+        # Apply the translation
+        plot_bounds.geometry = plot_bounds.translate(xoff=shift[0], yoff=shift[1])
+        field_trees.geometry = field_trees.translate(xoff=shift[0], yoff=shift[1])
+
         # Read the plot name and extract the plot bounds for this dataset
         # TODO, make optional to provide plot bounds
-        plot_bounds_list.append(all_plot_bounds.query("dataset_id == @dataset_id"))
-        field_trees_list.append(all_field_trees.query("dataset_id == @dataset_id"))
+        plot_bounds_list.append(plot_bounds)
+        field_trees_list.append(field_trees)
 
     # Compute the results with multiprocessing
     with Pool(n_workers) as p:
