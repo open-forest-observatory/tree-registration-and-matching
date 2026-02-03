@@ -24,8 +24,8 @@ OUTPUT_MEE = Path(OUTPUT_FOLDER, "shifts_MEE.npy")
 
 OUTPUT_FOLDER.mkdir(exist_ok=True, parents=True)
 
-RUN_MEE = True
-RUN_CHM = True
+RUN_MEE = False
+RUN_CHM = False
 VIS = True
 
 # An m3.2xl node has 64 CPU cores
@@ -37,7 +37,7 @@ with open(SHIFT_FILE) as infile:
     shifts = {k: -np.array(v) for k, v in shifts.items()}
     # This is what we hope the algorithm reports, the opposite of the applied shift, ordered by
     # dataset ID
-    target_shifts = np.concat([-shifts[k] for k in sorted(shifts.keys())], axis=0)
+    target_shifts = -1 * np.concat([shifts[k] for k in sorted(shifts.keys())], axis=0)
 
 if RUN_MEE:
     shifts_MEE = score_approach(
@@ -109,26 +109,26 @@ if VIS:
     MEE_shifts = np.load(OUTPUT_MEE)
 
     # The signs of these two are opposite so we just add them together
-    CHM_errors = CHM_shifts + target_shifts
-    MEE_errors = MEE_shifts + target_shifts
+    CHM_diffs = CHM_shifts + target_shifts
+    MEE_diffs = MEE_shifts + target_shifts
 
     # Subset to the high quality and high count plots
-    CHM_errors = CHM_errors[high_counts_and_quality]
-    MEE_errors = MEE_errors[high_counts_and_quality]
+    CHM_diffs = CHM_diffs[high_counts_and_quality]
+    MEE_diffs = MEE_diffs[high_counts_and_quality]
 
     # Replace nans with the worst value
-    CHM_errors = np.nan_to_num(CHM_errors, nan=12)
+    CHM_errors = np.nan_to_num(CHM_diffs, nan=20)
 
     # Show the magtides of the error for indivdual plots with the two approaches
-    CHM_errors = np.linalg.norm(CHM_errors, axis=1)
-    MEE_errors = np.linalg.norm(MEE_errors, axis=1)
+    CHM_errors = np.linalg.norm(CHM_diffs, axis=1)
+    MEE_errors = np.linalg.norm(MEE_diffs, axis=1)
 
     errors = np.array([MEE_errors, CHM_errors]).T
     colors = ["red", "blue"]
     # Show histograms
     plt.hist(
         errors,
-        bins=np.linspace(0, 12 * np.sqrt(2), 20),
+        bins=np.linspace(0, 20 * np.sqrt(2), 20),
         histtype="bar",
         label=["MEE", "CHM"],
     )
@@ -155,13 +155,13 @@ if VIS:
 
     # Show the x, y coordinates of the errors for the two approaches on separate subplots
     f, ax = plt.subplots(1, 2)
-    ax[0].scatter(MEE_shifts[:, 0], MEE_shifts[:, 1], alpha=0.2)
-    ax[1].scatter(CHM_shifts[:, 0], CHM_shifts[:, 1], alpha=0.2)
+    ax[0].scatter(MEE_diffs[:, 0], MEE_diffs[:, 1], alpha=0.2)
+    ax[1].scatter(CHM_diffs[:, 0], CHM_diffs[:, 1], alpha=0.2)
 
-    ax[0].set_xlim((-12.5, 12.5))
-    ax[0].set_ylim((-12.5, 12.5))
-    ax[1].set_xlim((-12.5, 12.5))
-    ax[1].set_ylim((-12.5, 12.5))
+    ax[0].set_xlim((-20.0, 20.0))
+    ax[0].set_ylim((-20.0, 20.0))
+    ax[1].set_xlim((-20.0, 20.0))
+    ax[1].set_ylim((-20.0, 20.0))
 
     ax[0].set_title("MEE displacements")
     ax[1].set_title("CHM displacements")
