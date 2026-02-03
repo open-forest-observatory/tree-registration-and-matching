@@ -18,20 +18,44 @@ SHIFTS = Path(
 OUTPUT_PLOT_BOUNDS = "/ofo-share/repos/david/tree-registration-and-matching/data/benchmarking-data/plot_bounds.gpkg"
 OUTPUT_FIELD_TREES = "/ofo-share/repos/david/tree-registration-and-matching/data/benchmarking-data/field_trees.gpkg"
 
-## Prep shift quality
-shift_quality = pd.read_csv(
-    "/ofo-share/repos/david/tree-registration-and-matching/data/ofo-example-2/shift_quality.csv"
+if False:
+    ## Prep shift quality
+    shift_quality = pd.read_csv(
+        "/ofo-share/repos/david/tree-registration-and-matching/data/ofo-example-2/shift_quality.csv"
+    )
+    shift_quality.Dataset = shift_quality.Dataset.str.replace(".tif", "")
+    shift_quality_dict = {
+        k: v
+        for k, v in zip(
+            shift_quality.Dataset.to_list(), shift_quality.Quality.to_list()
+        )
+    }
+    with open(
+        "/ofo-share/repos/david/tree-registration-and-matching/data/benchmarking-data/shift_quality.json",
+        "w",
+    ) as infile:
+        json.dump(shift_quality_dict, infile)
+
+## Merge detected trees
+detected_tree_files = list(
+    Path(
+        "/ofo-share/repos/david/tree-registration-and-matching/data/ofo-example-2/detected-trees"
+    ).glob("*")
 )
-shift_quality.Dataset = shift_quality.Dataset.str.replace(".tif", "")
-shift_quality_dict = {
-    k: v
-    for k, v in zip(shift_quality.Dataset.to_list(), shift_quality.Quality.to_list())
-}
-with open(
-    "/ofo-share/repos/david/tree-registration-and-matching/data/benchmarking-data/shift_quality.json",
-    "w",
-) as infile:
-    json.dump(shift_quality_dict, infile)
+
+all_detected_trees = []
+for detected_tree_file in detected_tree_files:
+    detected_trees = gpd.read_file(detected_tree_file)
+    detected_trees["dataset_id"] = detected_tree_file.stem
+    all_detected_trees.append(detected_trees)
+
+all_detected_trees = gpd.GeoDataFrame(
+    pd.concat(all_detected_trees), crs=all_detected_trees[0].crs
+)
+all_detected_trees.to_file(
+    "/ofo-share/repos/david/tree-registration-and-matching/data/ofo-tree-registration/detected-trees.gpkg"
+)
+breakpoint()
 
 all_field_trees = gpd.read_file(FIELD_TREES).to_crs(crs=26910)
 all_plot_bounds = gpd.read_file(PLOT_BOUNDS).to_crs(crs=26910)
