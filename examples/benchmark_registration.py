@@ -24,6 +24,8 @@ OUTPUT_MEE = Path(OUTPUT_FOLDER, "shifts_MEE.npy")
 
 OUTPUT_FOLDER.mkdir(exist_ok=True, parents=True)
 
+RANGES = (-20, 20, 0.5)
+
 RUN_MEE = False
 RUN_CHM = False
 VIS = True
@@ -64,8 +66,8 @@ if RUN_CHM:
             tree_points=tree_points,
             CHM=CHM,
             plot_bounds=plot_bounds,
-            x_range=(-12, 12, 0.25),
-            y_range=(-12, 12, 0.25),
+            x_range=RANGES,
+            y_range=RANGES,
         )
 
     shifts_CHM = score_approach(
@@ -108,16 +110,20 @@ if VIS:
     CHM_shifts = np.load(OUTPUT_CHM)
     MEE_shifts = np.load(OUTPUT_MEE)
 
-    # The signs of these two are opposite so we just add them together
-    CHM_diffs = CHM_shifts + target_shifts
-    MEE_diffs = MEE_shifts + target_shifts
+    # Set error values to 0
+    CHM_shifts = np.nan_to_num(CHM_shifts, 0)
+    MEE_shifts[np.logical_and(MEE_shifts[:, 0] == -12, MEE_shifts[:, 1] == -12), :] = 0
+
+    # Compute the difference between the computed shift and that which would have actually aligned
+    # it to the manually selected location
+    CHM_diffs = CHM_shifts - target_shifts
+    MEE_diffs = MEE_shifts - target_shifts
 
     # Subset to the high quality and high count plots
     CHM_diffs = CHM_diffs[high_counts_and_quality]
     MEE_diffs = MEE_diffs[high_counts_and_quality]
-
-    # Replace nans with the worst value
-    CHM_errors = np.nan_to_num(CHM_diffs, nan=20)
+    CHM_shifts = CHM_shifts[high_counts_and_quality]
+    MEE_shifts = MEE_shifts[high_counts_and_quality]
 
     # Show the magtides of the error for indivdual plots with the two approaches
     CHM_errors = np.linalg.norm(CHM_diffs, axis=1)
@@ -128,7 +134,7 @@ if VIS:
     # Show histograms
     plt.hist(
         errors,
-        bins=np.linspace(0, 20 * np.sqrt(2), 20),
+        bins=np.arange(0, 20 * np.sqrt(2), 0.5),
         histtype="bar",
         label=["MEE", "CHM"],
     )
@@ -163,6 +169,21 @@ if VIS:
     ax[1].set_xlim((-20.0, 20.0))
     ax[1].set_ylim((-20.0, 20.0))
 
-    ax[0].set_title("MEE displacements")
-    ax[1].set_title("CHM displacements")
+    ax[0].set_title("MEE displacement errors")
+    ax[1].set_title("CHM displacement errors")
+    plt.show()
+
+    # Show the x, y coordinates of the errors for the two approaches on separate subplots
+    f, ax = plt.subplots(1, 2)
+    ax[0].scatter(MEE_shifts[:, 0], MEE_shifts[:, 1], alpha=0.2)
+    ax[1].scatter(CHM_shifts[:, 0], CHM_shifts[:, 1], alpha=0.2)
+
+    ax[0].set_xlim((-20.0, 20.0))
+    ax[0].set_ylim((-20.0, 20.0))
+    ax[1].set_xlim((-20.0, 20.0))
+    ax[1].set_ylim((-20.0, 20.0))
+
+    ax[0].set_title("MEE shifts")
+    ax[1].set_title("CHM shifts")
+    plt.suptitle("Shifts")
     plt.show()
