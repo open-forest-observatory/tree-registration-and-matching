@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.optimize import fmin
+from scipy.spatial.distance import cdist
 import warnings
 import geopandas as gpd
 import matplotlib.pyplot as plt
@@ -83,24 +84,23 @@ def fit_euclidean_transformation(xy_mat1, xy_mat2, parameters=None):
         warnings.warn(msg)
 
     # Construct the feature descriptor for each object in each of the point clouds
-    feat_desc_mat1, char_dirs1 = compute_feature_descriptors(xy_mat1, R_local)
-    feat_desc_mat2, char_dirs2 = compute_feature_descriptors(xy_mat2, R_local)
-    feat_desc_cell_array = [feat_desc_mat1, feat_desc_mat2]
+    feat_desc_mat1, char_dirs1 = compute_feature_descriptors(
+        xy_mat1, R_local, rotate_to_characteristic=True
+    )
+    feat_desc_mat2, char_dirs2 = compute_feature_descriptors(
+        xy_mat2, R_local, rotate_to_characteristic=True
+    )
+    # feat_desc_cell_array = [feat_desc_mat1, feat_desc_mat2]
 
     # Preallocating matrix for storing pairwise distances between feature
     # descriptors of the two point clouds
-    feat_desc_pdist = np.zeros((N_objects_vect[1], N_objects_vect[0]))
-    for i in range(feat_desc_mat1.shape[1]):
-        feat_desc_pdist = (
-            feat_desc_pdist
-            + (feat_desc_mat2[:, i : i + 1] - feat_desc_mat1[:, i].T) ** 2
-        )
-    feat_desc_pdist = np.sqrt(feat_desc_pdist)
+    feat_desc_pdist = cdist(feat_desc_mat1, feat_desc_mat2)
+    breakpoint()
 
     # For each object in point cloud 2, find the most similar feature
     # descriptor vector in point cloud 1
-    min_desc_dists = np.min(feat_desc_pdist, axis=1)
-    nn_indices = np.argmin(feat_desc_pdist, axis=1)
+    nn_indices = np.argmin(feat_desc_pdist, axis=0)
+    # min_desc_dists = feat_desc_pdist[]
 
     # For each object in point cloud 2, find the 2nd nearest neighbor feature
     # descriptor in point cloud 1
@@ -121,6 +121,15 @@ def fit_euclidean_transformation(xy_mat1, xy_mat2, parameters=None):
     theta_best = 0
     idx_matches1_best = []
     idx_matches2_best = []
+    if True:
+        starting_sorted_indices = sorted_indices[:k]
+        starting_nn_indices = nn_indices[starting_sorted_indices]
+
+        breakpoint()
+        xy_mat2_subset = xy_mat2[starting_sorted_indices]
+        xy_mat1_subset = xy_mat1[starting_nn_indices]
+
+        breakpoint()
 
     for i_iter in range(k):
         # Indices of objects corresponding to the current tentative match
@@ -398,11 +407,14 @@ if __name__ == "__main__":
     dataset = "0159_000211_000220"
 
     field_trees = gpd.read_file(
-        f"/ofo-share/repos/david/tree-registration-and-matching/data/ofo-example-2/field_trees/{dataset}.gpkg"
+        f"/ofo-share/repos/david/tree-registration-and-matching/data/ofo-tree-registration/field_trees.gpkg"
     )
     detected_trees = gpd.read_file(
-        f"/ofo-share/repos/david/tree-registration-and-matching/data/ofo-example-2/detected-trees/{dataset}.gpkg"
+        f"/ofo-share/repos/david/tree-registration-and-matching/data/ofo-tree-registration/detected-trees.gpkg"
     )
+    field_trees = field_trees.query("dataset_id==@dataset")
+    detected_trees = detected_trees.query("dataset_id==@dataset")
+
     align_plot_hyyppa(field_trees, detected_trees, vis=True)
 
     # Create synthetic test data
