@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
@@ -9,11 +10,11 @@ from tree_registration_and_matching.benchmark import score_approach
 from tree_registration_and_matching.constants import DATA_DIR
 from tree_registration_and_matching.register_CHM import find_best_shift
 
-DETECTED_TREES = Path(DATA_DIR, "ofo-example-2", "detected-trees")
-CHMS = Path(DATA_DIR, "ofo-example-2", "CHMs")
-FIELD_TREES = Path(DATA_DIR, "ofo-example-2", "field_trees")
-PLOTS_FILE = Path(DATA_DIR, "ofo-example-2", "ofo_ground-reference_plots.gpkg")
-QUALITY_FILE = Path(DATA_DIR, "ofo-example-2", "shift_quality.csv")
+DETECTED_TREES = Path(DATA_DIR, "ofo-tree-registration", "detected-trees.gpkg")
+CHMS = Path(DATA_DIR, "ofo-tree-registration", "CHMs")
+FIELD_TREES = Path(DATA_DIR, "ofo-tree-registration", "field_trees.gpkg")
+PLOTS_FILE = Path(DATA_DIR, "ofo-tree-registration", "plot_bounds.gpkg")
+QUALITY_FILE = Path(DATA_DIR, "ofo-tree-registration", "shift_quality.json")
 
 OUTPUT_FOLDER = Path(DATA_DIR, "benchmarking_results")
 OUTPUT_CHM = Path(OUTPUT_FOLDER, "shifts_CHM.npy")
@@ -21,8 +22,8 @@ OUTPUT_MEE = Path(OUTPUT_FOLDER, "shifts_MEE.npy")
 
 OUTPUT_FOLDER.mkdir(exist_ok=True, parents=True)
 
-RUN_MEE = False
-RUN_CHM = False
+RUN_MEE = True
+RUN_CHM = True
 VIS = True
 
 if RUN_MEE:
@@ -33,6 +34,8 @@ if RUN_MEE:
         vis_results=False,
         crop_to_plot_bounds=True,
         plot_buffer_distance=10,
+        CHM_approach=False,
+        n_workers=60,
     )
     np.save(
         OUTPUT_MEE,
@@ -51,15 +54,15 @@ if RUN_CHM:
         )
 
     shifts_CHM = score_approach(
-        field_trees_folder=FIELD_TREES,
-        CHMs_or_detected_trees_folder=CHMS,
+        field_trees_file=FIELD_TREES,
+        CHMs_or_detected_trees=CHMS,
         plots_file=PLOTS_FILE,
         alignment_algorithm=find_best_shift_specialized,
         CHM_approach=True,
         crop_to_plot_bounds=True,
         plot_buffer_distance=10,
         vis_plots=False,
-        n_workers=24,
+        n_workers=60,
     )
     np.save(
         OUTPUT_CHM,
@@ -67,14 +70,22 @@ if RUN_CHM:
     )
 
 if VIS:
-    field_trees = sorted(FIELD_TREES.glob("*"))
-    datasets = [str(f.stem) + ".tif" for f in field_trees]
-    counts = [len(gpd.read_file(f)) for f in field_trees]
+    field_trees = gpd.read_file(FIELD_TREES)
+    tree_counts = field_trees.dataset_id.value_counts()
+    tree_counts = pd.DataFrame(
+        {"dataset_id": tree_counts.index, "counts": tree_counts.values}
+    )
+    tree_counts = tree_counts.sort_values(by="dataset_id", axis=0)
 
-    quality = pd.read_csv(QUALITY_FILE)
-    quality = quality[quality.Dataset.isin(datasets)]
-    high_quality = (quality.Quality >= 3).values
-    high_counts = np.array(counts) > 10
+    with open(QUALITY_FILE, "r") as infile:
+        quality = json.load(infile)
+        quality = pd.DataFrame(
+            {"dataset": list(quality.keys()), "quality": list(quality.values())}
+        )
+
+    quality = quality[quality.dataset.isin(tree_counts.dataset_id)]
+    high_quality = (quality.quality >= 3).values
+    high_counts = np.array(tree_counts.counts) > 10
     high_counts_and_quality = np.logical_and(high_counts, high_quality)
 
     CHM_shifts = np.load(OUTPUT_CHM)
