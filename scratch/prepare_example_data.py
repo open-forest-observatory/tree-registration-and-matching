@@ -1,7 +1,9 @@
 from pathlib import Path
-import geopandas as gpd
 import json
+
+import geopandas as gpd
 import pandas as pd
+import numpy as np
 
 from tree_registration_and_matching.utils import is_overstory
 
@@ -36,32 +38,49 @@ if False:
     ) as infile:
         json.dump(shift_quality_dict, infile)
 
-## Merge detected trees
-detected_tree_files = list(
-    Path(
-        "/ofo-share/repos/david/tree-registration-and-matching/data/ofo-example-2/detected-trees"
-    ).glob("*")
-)
+if False:
+    ## Merge detected trees
+    detected_tree_files = list(
+        Path(
+            "/ofo-share/repos/david/tree-registration-and-matching/data/ofo-example-2/detected-trees"
+        ).glob("*")
+    )
 
-all_detected_trees = []
-for detected_tree_file in detected_tree_files:
-    detected_trees = gpd.read_file(detected_tree_file)
-    detected_trees["dataset_id"] = detected_tree_file.stem
-    all_detected_trees.append(detected_trees)
+    all_detected_trees = []
+    for detected_tree_file in detected_tree_files:
+        detected_trees = gpd.read_file(detected_tree_file)
+        detected_trees["dataset_id"] = detected_tree_file.stem
+        all_detected_trees.append(detected_trees)
 
-all_detected_trees = gpd.GeoDataFrame(
-    pd.concat(all_detected_trees), crs=all_detected_trees[0].crs
-)
-all_detected_trees.to_file(
-    "/ofo-share/repos/david/tree-registration-and-matching/data/ofo-tree-registration/detected-trees.gpkg"
-)
-breakpoint()
+    all_detected_trees = gpd.GeoDataFrame(
+        pd.concat(all_detected_trees), crs=all_detected_trees[0].crs
+    )
+    all_detected_trees.to_file(
+        "/ofo-share/repos/david/tree-registration-and-matching/data/ofo-tree-registration/detected-trees.gpkg"
+    )
 
 all_field_trees = gpd.read_file(FIELD_TREES).to_crs(crs=26910)
 all_plot_bounds = gpd.read_file(PLOT_BOUNDS).to_crs(crs=26910)
 
 with open(SHIFTS) as infile:
     shifts = json.load(infile)
+
+nan_height = all_field_trees.height.isna()
+all_field_trees[nan_height].height = all_field_trees[nan_height].height_allometric
+
+# For any remaining missing height values that have DBH, use an allometric equation to compute
+# the height
+nan_height = all_field_trees.height.isna()
+# These parameters were fit on paired height, DBH data from this dataset.
+allometric_height_func = lambda x: 1.3 + np.exp(
+    -0.3136489123372108 + 0.84623571 * np.log(x)
+)
+# Compute the allometric height and assign it
+allometric_height = allometric_height_func(all_field_trees[nan_height].dbh.to_numpy())
+all_field_trees.loc[nan_height, "height"] = allometric_height
+
+# Filter out any trees that still don't have height (just 1 in current experiments)
+ground_reference_trees = all_field_trees[~all_field_trees.height.isna()]
 
 # Drop dead trees
 live_trees = all_field_trees.live_dead != "D"
