@@ -25,9 +25,12 @@ OUTPUT_MEE = Path(OUTPUT_FOLDER, "shifts_MEE.npy")
 OUTPUT_FOLDER.mkdir(exist_ok=True, parents=True)
 
 RANGES = (-12, 12, 0.25)
+# This should be set at least as large as the maximum shift, plus a reasonable buffer extra as
+# determined by the context of the algorithm.
+PLOT_BUFFER_DIST = 20
 
-RUN_MEE = True
-RUN_CHM = True
+RUN_MEE = False
+RUN_CHM = False
 VIS = True
 
 # An m3.2xl node has 64 CPU cores
@@ -50,7 +53,7 @@ if RUN_MEE:
         shift_CRS=SHIFT_CRS,
         vis_results=False,
         crop_to_plot_bounds=True,
-        plot_buffer_distance=10,
+        plot_buffer_distance=PLOT_BUFFER_DIST,
         CHM_approach=False,
         n_workers=N_WORKERS,
     )
@@ -79,7 +82,7 @@ if RUN_CHM:
         alignment_algorithm=find_best_shift_specialized,
         CHM_approach=True,
         crop_to_plot_bounds=True,
-        plot_buffer_distance=10,
+        plot_buffer_distance=PLOT_BUFFER_DIST,
         vis_plots=False,
         n_workers=N_WORKERS,
     )
@@ -129,7 +132,8 @@ if VIS:
     print(f"{failed_MEE_shifts.sum()} / {n_good_plots} MEE registrations failed")
     print(f"{failed_shifts_both.sum()} / {n_good_plots} plots failed for both")
 
-    print(f"The following datasets failed: {dataset_ids[failed_CHM_shifts]}")
+    print(f"The following datasets failed for CHM: {dataset_ids[failed_CHM_shifts]}")
+    print(f"The following datasets failed for MEE: {dataset_ids[failed_MEE_shifts]}")
 
     CHM_shifts = np.nan_to_num(CHM_shifts, 0)
     MEE_shifts[failed_MEE_shifts, :] = 0
@@ -155,8 +159,9 @@ if VIS:
         label=["MEE", "CHM", "no shift"],
     )
     plt.legend()
-    plt.title("Paired histogram")
+    plt.title("Histogram of registration quality")
     plt.xlabel("Errors from true shift (m)")
+    plt.ylabel("Number of plots")
     plt.show()
 
     plt.title("MEE error magnitudes vs. CHM error magnitudes")
