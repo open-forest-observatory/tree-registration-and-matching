@@ -24,10 +24,10 @@ OUTPUT_MEE = Path(OUTPUT_FOLDER, "shifts_MEE.npy")
 
 OUTPUT_FOLDER.mkdir(exist_ok=True, parents=True)
 
-RANGES = (-20, 20, 0.5)
+RANGES = (-12, 12, 0.25)
 
-RUN_MEE = False
-RUN_CHM = False
+RUN_MEE = True
+RUN_CHM = True
 VIS = True
 
 # An m3.2xl node has 64 CPU cores
