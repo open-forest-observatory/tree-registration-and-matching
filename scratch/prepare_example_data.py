@@ -85,6 +85,9 @@ ground_reference_trees = all_field_trees[~all_field_trees.height.isna()]
 # Drop dead trees
 live_trees = all_field_trees.live_dead != "D"
 all_field_trees = all_field_trees[live_trees]
+# Drop short trees
+tall_enough_trees = all_field_trees.height > 10
+all_field_trees = all_field_trees[tall_enough_trees]
 
 output_plot_bounds = []
 output_field_trees = []
