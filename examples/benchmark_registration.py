@@ -96,6 +96,8 @@ if VIS:
     )
     tree_counts = tree_counts.sort_values(by="dataset_id", axis=0)
 
+    dataset_ids = field_trees.dataset_id.unique()
+
     with open(QUALITY_FILE, "r") as infile:
         quality = json.load(infile)
         quality = pd.DataFrame(
@@ -114,6 +116,7 @@ if VIS:
     CHM_shifts = CHM_shifts[high_counts_and_quality]
     MEE_shifts = MEE_shifts[high_counts_and_quality]
     target_shifts = target_shifts[high_counts_and_quality]
+    dataset_ids = dataset_ids[high_counts_and_quality]
 
     # Set error values to 0
     failed_MEE_shifts = np.logical_and(MEE_shifts[:, 0] == -12, MEE_shifts[:, 1] == -12)
@@ -125,6 +128,8 @@ if VIS:
     print(f"{failed_CHM_shifts.sum()} / {n_good_plots} CHM registrations failed")
     print(f"{failed_MEE_shifts.sum()} / {n_good_plots} MEE registrations failed")
     print(f"{failed_shifts_both.sum()} / {n_good_plots} plots failed for both")
+
+    print(f"The following datasets failed: {dataset_ids[failed_CHM_shifts]}")
 
     CHM_shifts = np.nan_to_num(CHM_shifts, 0)
     MEE_shifts[failed_MEE_shifts, :] = 0
