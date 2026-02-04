@@ -1,5 +1,5 @@
-from pathlib import Path
 import json
+from pathlib import Path
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
