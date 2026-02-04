@@ -14,10 +14,10 @@ from tree_registration_and_matching.utils import ensure_projected_CRS
 
 
 def compute_shift(
-    field_trees_file,
-    CHMs_or_detected_trees_file,
+    field_trees,
+    CHMs_or_detected_trees,
     plot_bounds,
-    plot_id,
+    dataset_id,
     alignment_algorithm,
     CHM_approach,
     crop_to_plot_bounds,
@@ -26,11 +26,10 @@ def compute_shift(
 ):
     """Contains the per-plot logic to support parrellization"""
     # Read the field trees and ensure that a projected CRS is used
-    field_trees = gpd.read_file(field_trees_file)
     plot_bounds.to_crs(field_trees.crs, inplace=True)
 
     if CHM_approach:
-        content_to_register_to = rio.open(CHMs_or_detected_trees_file)
+        content_to_register_to = rio.open(CHMs_or_detected_trees)
         if not content_to_register_to.crs.is_projected:
             raise ValueError(
                 "Raster does not have a projected CRS. This may cause errors in registration algorithms."
@@ -91,13 +90,13 @@ def compute_shift(
             plot_bounds.affine_transform(transform).plot(
                 ax=ax, facecolor="none", edgecolor="cyan", linewidth=3
             )
-            ax.set_title(f"CHM for plot_ID {plot_id}")
+            ax.set_title(f"CHM for dataset_ID {dataset_id}")
             plt.show()
     else:
         # Ensure that the field trees are in a projected (meters-based) CRS
         field_trees = ensure_projected_CRS(field_trees)
-        # Read the detected trees and convert to the same CRS as the field trees
-        content_to_register_to = gpd.read_file(CHMs_or_detected_trees_file)
+        # The data is already read
+        content_to_register_to = CHMs_or_detected_trees
         content_to_register_to.to_crs(field_trees.crs, inplace=True)
 
         # Crop to plot bounds if requested
@@ -116,7 +115,7 @@ def compute_shift(
                 ax=ax, c="b", markersize=2, label="detected trees"
             )
             field_trees.plot(ax=ax, c="r", markersize=2, label="surveyed trees")
-            plt.title(f"Visualization for {plot_id}")
+            plt.title(f"Visualization for {dataset_id}")
             plt.legend()
             plt.show()
 
@@ -140,9 +139,11 @@ def compute_shift(
 
 
 def score_approach(
-    field_trees_folder: str,
-    CHMs_or_detected_trees_folder: str,
+    field_trees_file: str,
+    CHMs_or_detected_trees: str,
     plots_file: str,
+    shifts: dict,
+    shift_CRS,
     alignment_algorithm=align_plot,
     CHM_approach: bool = False,
     vis_plots: bool = False,
@@ -154,17 +155,24 @@ def score_approach(
     """Assess the quality of the shift on a set of plots.
 
     Args:
-        field_tree_folder (str):
-            The folder of geospatial files representing the surveyed trees, one per plot. The files
-            this folder should be named identically to those in `detected_tree_folder`.
-        CHMs_or_detected_trees_folder (str):
-            The folder of geospatial files representing either:
-                * Canopy height models, one per plot. This data will be in a raster format (e.g. .tif)
-                # Detected tree tops, one per plot. This data will be in a vector format (e.g. gpkg)
+        field_tree_file (str):
+            The file for geospatial files representing the surveyed trees. The `dataset_id` column
+            in this data should correspond to the filenames in `CHMs_or_detected_trees_folder`.
+        CHMs_or_detected_trees (str):
+            Either:
+                * A folder of canopy height models, one per plot. This data will be in a raster format
+                  (e.g. .tif)
+                * A file corresponding to detected tree tops, with `dataset_id` identifying the dataset.
+                  This data will be in a vector format (e.g. gpkg)
         plots_file (str):
             A path to a geopackage file with geometry representing the surveyed area. The 'plot_id'
             field represents which dataset (field trees plus CHMs or detected trees) files it
             corresponds to. Note that the plot_id field will not contain file extension.
+        shifts (dict):
+            A dictionary mapping from dataset to a (x, y) shift to apply to the field trees and
+            plot bounds.
+        shifts_CRS (CRS):
+            The data should be converted this CRS prior to translation.
         alignment_algorithm (function, optional):
             A function which aligns the field and detected trees. The second return argument should
             be the (x, y) shift. Defaults to align_plot.
@@ -194,46 +202,65 @@ def score_approach(
         np.array: The error for each plot, ordered by the sorted plot IDs.
     """
 
-    # Read all the plot bounds
-    all_plot_bounds = gpd.read_file(plots_file)
+    # Read all the plot bounds and trees
+    all_plot_bounds = gpd.read_file(plots_file).to_crs(shift_CRS)
+    all_field_trees = gpd.read_file(field_trees_file).to_crs(shift_CRS)
+
+    # Unique dataset IDs
+    dataset_IDs = sorted(all_field_trees.dataset_id.unique())
 
     # List all the files in both input folders
-    field_trees_files = sorted(field_trees_folder.glob("*"))
-    CHMs_or_detected_trees_files = sorted(CHMs_or_detected_trees_folder.glob("*"))
+    # TODO this needs to be updated
+    if CHM_approach:
+        CHMs_or_detected_trees_elements = sorted(CHMs_or_detected_trees.glob("*"))
+        if set(all_field_trees.dataset_id.unique()) != set(
+            [f.stem for f in CHMs_or_detected_trees_elements]
+        ):
+            raise ValueError(
+                "Different filenames between CHMs and field tree dataset IDs"
+            )
+    else:
+        detected_trees = gpd.read_file(CHMs_or_detected_trees)
+        CHMs_or_detected_trees_elements = [
+            detected_trees.query("dataset_id==dataset_id") for dataset_id in dataset_IDs
+        ]
 
     # Ensure there are the same number of files
-    if len(field_trees_files) != len(CHMs_or_detected_trees_files):
+    if len(dataset_IDs) != len(CHMs_or_detected_trees_elements):
         raise ValueError("Different number of files")
 
-    if set([f.stem for f in field_trees_files]) != set(
-        [f.stem for f in CHMs_or_detected_trees_files]
-    ):
-        raise ValueError("Different filenames")
-
-    plot_ids = []
+    field_trees_list = []
     plot_bounds_list = []
     # Iterate over files to extract plot bounds corresponding to each
-    for field_tree_file in field_trees_files:
+    for dataset_id in dataset_IDs:
+        # Find the corresponding shift
+        shift = shifts[dataset_id][0]
+
+        # Subset to the specified dataset
+        plot_bounds = all_plot_bounds.query("dataset_id == @dataset_id")
+        field_trees = all_field_trees.query("dataset_id == @dataset_id")
+
+        # Apply the translation
+        plot_bounds.geometry = plot_bounds.translate(xoff=shift[0], yoff=shift[1])
+        field_trees.geometry = field_trees.translate(xoff=shift[0], yoff=shift[1])
+
         # Read the plot name and extract the plot bounds for this dataset
         # TODO, make optional to provide plot bounds
-        plot_id = field_tree_file.stem[:4]
-        plot_bounds = all_plot_bounds.query("plot_id == @plot_id")
-
-        plot_ids.append(plot_id)
         plot_bounds_list.append(plot_bounds)
+        field_trees_list.append(field_trees)
 
     # Compute the results with multiprocessing
     with Pool(n_workers) as p:
-        # The lists below are a bit of a hack because they just repeat the same q
-        n_files = len(field_trees_files)
+        # The lists below are a bit of a hack because they just repeat the same values
+        n_files = len(dataset_IDs)
         all_shifts = p.starmap(
             compute_shift,
             list(
                 zip(
-                    field_trees_files,
-                    CHMs_or_detected_trees_files,
+                    field_trees_list,
+                    CHMs_or_detected_trees_elements,
                     plot_bounds_list,
-                    plot_ids,
+                    dataset_IDs,
                     [alignment_algorithm] * n_files,
                     [CHM_approach] * n_files,
                     [crop_to_plot_bounds] * n_files,
