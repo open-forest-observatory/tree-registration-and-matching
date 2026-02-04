@@ -149,8 +149,18 @@ if VIS:
     # Compute the errors for leaving the plot at the initial location
     no_shift_errors = np.linalg.norm(target_shifts, axis=1)
 
+    # Show ECDF
+    plt.ecdf(MEE_errors, label="MEE")
+    plt.ecdf(CHM_errors, label="CHM")
+    plt.ecdf(no_shift_errors, label="no shift")
+    plt.legend()
+    plt.title("Cumulative distribution of plots\nbelow an error threshold")
+    plt.xlabel("Error from true shift (m)")
+    plt.ylabel("Fraction of plots")
+
+    plt.show()
+
     errors = np.array([MEE_errors, CHM_errors, no_shift_errors]).T
-    colors = ["red", "blue", "green"]
     # Show histograms
     plt.hist(
         errors,
