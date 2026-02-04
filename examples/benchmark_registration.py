@@ -110,33 +110,44 @@ if VIS:
     CHM_shifts = np.load(OUTPUT_CHM)
     MEE_shifts = np.load(OUTPUT_MEE)
 
+    # Subset to the high quality and high count plots
+    CHM_shifts = CHM_shifts[high_counts_and_quality]
+    MEE_shifts = MEE_shifts[high_counts_and_quality]
+    target_shifts = target_shifts[high_counts_and_quality]
+
     # Set error values to 0
+    failed_MEE_shifts = np.logical_and(MEE_shifts[:, 0] == -12, MEE_shifts[:, 1] == -12)
+    failed_CHM_shifts = np.logical_not(np.isfinite(CHM_shifts[:, 1]))
+    failed_shifts_both = np.logical_and(failed_MEE_shifts, failed_CHM_shifts)
+
+    n_good_plots = CHM_shifts.shape[0]
+
+    print(f"{failed_CHM_shifts.sum()} / {n_good_plots} CHM registrations failed")
+    print(f"{failed_MEE_shifts.sum()} / {n_good_plots} MEE registrations failed")
+    print(f"{failed_shifts_both.sum()} / {n_good_plots} plots failed for both")
+
     CHM_shifts = np.nan_to_num(CHM_shifts, 0)
-    MEE_shifts[np.logical_and(MEE_shifts[:, 0] == -12, MEE_shifts[:, 1] == -12), :] = 0
+    MEE_shifts[failed_MEE_shifts, :] = 0
 
     # Compute the difference between the computed shift and that which would have actually aligned
     # it to the manually selected location
     CHM_diffs = CHM_shifts - target_shifts
     MEE_diffs = MEE_shifts - target_shifts
 
-    # Subset to the high quality and high count plots
-    CHM_diffs = CHM_diffs[high_counts_and_quality]
-    MEE_diffs = MEE_diffs[high_counts_and_quality]
-    CHM_shifts = CHM_shifts[high_counts_and_quality]
-    MEE_shifts = MEE_shifts[high_counts_and_quality]
-
     # Show the magtides of the error for indivdual plots with the two approaches
     CHM_errors = np.linalg.norm(CHM_diffs, axis=1)
     MEE_errors = np.linalg.norm(MEE_diffs, axis=1)
+    # Compute the errors for leaving the plot at the initial location
+    no_shift_errors = np.linalg.norm(target_shifts, axis=1)
 
-    errors = np.array([MEE_errors, CHM_errors]).T
-    colors = ["red", "blue"]
+    errors = np.array([MEE_errors, CHM_errors, no_shift_errors]).T
+    colors = ["red", "blue", "green"]
     # Show histograms
     plt.hist(
         errors,
-        bins=np.arange(0, 20 * np.sqrt(2), 0.5),
+        bins=np.arange(0, 20 * np.sqrt(2), 1),
         histtype="bar",
-        label=["MEE", "CHM"],
+        label=["MEE", "CHM", "no shift"],
     )
     plt.legend()
     plt.title("Paired histogram")
@@ -154,8 +165,8 @@ if VIS:
 
     plt.xlabel("MEE error magnitudes")
     plt.ylabel("CHM error magnitudes")
-    plt.xlim(-0.5, np.sqrt(2) * 12.5)
-    plt.ylim(-0.5, np.sqrt(2) * 12.5)
+    plt.xlim(-0.5, np.sqrt(2) * 20)
+    plt.ylim(-0.5, np.sqrt(2) * 20)
     plt.legend()
     plt.show()
 
