@@ -2,6 +2,7 @@ import typing
 from itertools import product
 
 import geopandas as gpd
+from scipy.stats import spearmanr
 import matplotlib.pyplot as plt
 import numpy as np
 import rasterio as rio
@@ -22,6 +23,22 @@ def corr_func(sampled_heights, provided_heights):
         corr = np.nan
     else:
         corr = np.corrcoef(sampled_heights[mask], provided_heights[mask])[0, 1]
+
+    return corr
+
+
+def rank_corr_func(sampled_heights, provided_heights):
+    # Handle masked arrays
+    if np.ma.isMaskedArray(sampled_heights):
+        sampled_heights = sampled_heights.filled(np.nan)
+
+    # Keep only points where both are finite
+    mask = np.isfinite(sampled_heights) & np.isfinite(provided_heights)
+
+    if mask.sum() < 2:
+        corr = np.nan
+    else:
+        corr = spearmanr(sampled_heights[mask], provided_heights[mask]).statistic
 
     return corr
 
