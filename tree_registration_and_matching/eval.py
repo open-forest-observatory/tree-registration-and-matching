@@ -112,7 +112,7 @@ def obj_mee_matching(
     min_height: float = 10,
     edge_buffer: float = 5,
     height_column: str = "height",
-    return_prec_recall: bool = False,
+    return_all_metrics: bool = False,
 ) -> float:
     """
     Compute the F1 score for how many trees matched.
@@ -126,9 +126,11 @@ def obj_mee_matching(
         min_height (float, optional): Minimum height of field trees to evaluate. Defaults to 10.
         edge_buffer (float, optional): Only score trees this distance from the boundary of the survey region. Defaults to 5.
         height_column (str, optional): What column represents the tree heights. Defaults to "height".
+        return_all_metrics (bool, optional): Return a dictionary of metrics as the second return.
 
     Returns:
         float: The F1 score for matching
+        dict: (optional): f1, recall, precision, counts for drone/field core/matched
     """
     # Crop to the observation bounds
     shifted_field_trees_cropped = shifted_field_trees.clip(
@@ -166,17 +168,15 @@ def obj_mee_matching(
         set(core_drone_trees.index)
     )
 
+    # Compute the number of trees
+    n_core_field = len(core_field_trees)
+    n_core_drone = len(core_drone_trees)
+    n_field_matched = len(field_core_matched)
+    n_drone_matched = len(drone_core_matched)
+
     # Compute precision and recall, using only the core trees as the denominator
-    recall = (
-        len(field_core_matched) / len(core_field_trees)
-        if len(core_field_trees) > 0
-        else 0
-    )
-    precision = (
-        len(drone_core_matched) / len(core_drone_trees)
-        if len(core_drone_trees) > 0
-        else 0
-    )
+    recall = n_field_matched / n_core_field if n_core_field > 0 else 0
+    precision = n_drone_matched / n_core_drone if n_core_drone > 0 else 0
 
     # Compute the F1 score, setting to 0 if both precision and recall are 0
     f1 = (
@@ -184,7 +184,15 @@ def obj_mee_matching(
         if (precision + recall) > 0
         else 0
     )
-    if return_prec_recall:
-        return precision, recall, f1
+    if return_all_metrics:
+        return f1, {
+            "F1": f1,
+            "precision": precision,
+            "recall": recall,
+            "n_core_field": n_core_field,
+            "n_core_drone": n_core_drone,
+            "n_field_matched": n_field_matched,
+            "n_drone_matched": n_drone_matched,
+        }
 
     return f1
