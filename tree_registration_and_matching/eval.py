@@ -15,6 +15,7 @@ def match_trees_singlestratum(
     search_distance_fun_intercept=1,
     height_col="height",
     vis=False,
+    points_scale_factor: float = 0.4,
 ):
     # A reimplementation of
     # https://github.com/open-forest-observatory/ofo-r/blob/3e3d138ffd99539affb7158979d06fc535bc1066/R/tree-detection-accuracy-assessment.R#L164
@@ -88,8 +89,20 @@ def match_trees_singlestratum(
     if vis:
         # Visualize matches
         f, ax = plt.subplots()
-        ax.scatter(x=field_tree_points_np[:, 0], y=field_tree_points_np[:, 1], c="r")
-        ax.scatter(x=drone_tree_points_np[:, 0], y=drone_tree_points_np[:, 1], c="b")
+        ax.scatter(
+            x=field_tree_points_np[:, 0],
+            y=field_tree_points_np[:, 1],
+            s=field_trees[height_col] * points_scale_factor,
+            c="r",
+            label="field trees",
+        )
+        ax.scatter(
+            x=drone_tree_points_np[:, 0],
+            y=drone_tree_points_np[:, 1],
+            s=drone_trees[height_col] * points_scale_factor,
+            c="b",
+            label="drone trees",
+        )
 
         ordered_matched_field_trees = field_tree_points_np[matched_field_tree_inds]
         ordered_matched_drone_trees = drone_tree_points_np[matched_drone_tree_inds]
@@ -98,9 +111,10 @@ def match_trees_singlestratum(
             for x, y in zip(ordered_matched_field_trees, ordered_matched_drone_trees)
         ]
 
-        lc = mc.LineCollection(lines, colors="k", linewidths=2)
+        lc = mc.LineCollection(lines, colors="k", linewidths=2, label="matches")
         ax.add_collection(lc)
 
+        ax.legend()
         plt.show()
     return matched_field_tree_inds, matched_drone_tree_inds
 
@@ -113,6 +127,7 @@ def obj_mee_matching(
     edge_buffer: float = 5,
     height_column: str = "height",
     return_all_metrics: bool = False,
+    vis: bool = False,
 ) -> float:
     """
     Compute the F1 score for how many trees matched.
@@ -127,6 +142,7 @@ def obj_mee_matching(
         edge_buffer (float, optional): Only score trees this distance from the boundary of the survey region. Defaults to 5.
         height_column (str, optional): What column represents the tree heights. Defaults to "height".
         return_all_metrics (bool, optional): Return a dictionary of metrics as the second return.
+        vis (bool, optional): Should the matching be shown. Defaults to False.
 
     Returns:
         float: The F1 score for matching
@@ -145,7 +161,7 @@ def obj_mee_matching(
     matched_field_tree_inds, matched_drone_tree_inds = match_trees_singlestratum(
         field_trees=shifted_field_trees_cropped,
         drone_trees=drone_trees_cropped,
-        vis=False,
+        vis=vis,
     )
 
     # From the tree inds, we get the number of matches. Now all that's left to do is compute which
