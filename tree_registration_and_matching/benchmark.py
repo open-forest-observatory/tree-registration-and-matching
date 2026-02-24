@@ -1,6 +1,8 @@
 from multiprocessing import Pool
 from pathlib import Path
+from typing import List
 
+import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -286,3 +288,85 @@ def score_approach(
         plt.hist(magnitudes)
 
     return all_shifts
+
+
+def vis_result(_per_approach: List[np.ndarray], approach_names: List[str]):
+    n_approaches = len(errors_per_approach)
+
+    errors = [e]
+
+    # Show the magtides of the error for indivdual plots with the two approaches
+    CHM_errors = np.linalg.norm(CHM_diffs, axis=1)
+    MEE_errors = np.linalg.norm(MEE_diffs, axis=1)
+    # Compute the errors for leaving the plot at the initial location
+    no_shift_errors = np.linalg.norm(target_shifts, axis=1)
+
+    # Show ECDF
+    plt.ecdf(MEE_errors, label="MEE")
+    plt.ecdf(CHM_errors, label="CHM")
+    plt.ecdf(no_shift_errors, label="no shift")
+    plt.legend()
+    plt.title("Cumulative distribution of plots\nbelow an error threshold")
+    plt.xlabel("Error from true shift (m)")
+    plt.ylabel("Fraction of plots")
+
+    plt.show()
+
+    errors = np.array([MEE_errors, CHM_errors, no_shift_errors]).T
+    # Show histograms
+    plt.hist(
+        errors,
+        bins=np.arange(0, 20 * np.sqrt(2), 1),
+        histtype="bar",
+        label=["MEE", "CHM", "no shift"],
+    )
+    plt.legend()
+    plt.title("Histogram of registration quality")
+    plt.xlabel("Errors from true shift (m)")
+    plt.ylabel("Number of plots")
+    plt.show()
+
+    plt.title("MEE error magnitudes vs. CHM error magnitudes")
+    plt.scatter(MEE_errors, CHM_errors, alpha=0.5)
+
+    # Compute trend line between MEE and CHM errors
+    z = np.polyfit(MEE_errors, CHM_errors, 1)
+    p = np.poly1d(z)
+    x_trend = np.linspace(MEE_errors.min(), MEE_errors.max(), 100)
+    plt.plot(x_trend, p(x_trend), "r--", label=f"Trend line: y={z[0]:.2f}x+{z[1]:.2f}")
+
+    plt.xlabel("MEE error magnitudes")
+    plt.ylabel("CHM error magnitudes")
+    plt.xlim(-0.5, np.sqrt(2) * 20)
+    plt.ylim(-0.5, np.sqrt(2) * 20)
+    plt.legend()
+    plt.show()
+
+    # Show the x, y coordinates of the errors for the two approaches on separate subplots
+    f, ax = plt.subplots(1, 2)
+    ax[0].scatter(MEE_diffs[:, 0], MEE_diffs[:, 1], alpha=0.2)
+    ax[1].scatter(CHM_diffs[:, 0], CHM_diffs[:, 1], alpha=0.2)
+
+    ax[0].set_xlim((-20.0, 20.0))
+    ax[0].set_ylim((-20.0, 20.0))
+    ax[1].set_xlim((-20.0, 20.0))
+    ax[1].set_ylim((-20.0, 20.0))
+
+    ax[0].set_title("MEE displacement errors")
+    ax[1].set_title("CHM displacement errors")
+    plt.show()
+
+    # Show the x, y coordinates of the errors for the two approaches on separate subplots
+    f, ax = plt.subplots(1, 2)
+    ax[0].scatter(MEE_shifts[:, 0], MEE_shifts[:, 1], alpha=0.2)
+    ax[1].scatter(CHM_shifts[:, 0], CHM_shifts[:, 1], alpha=0.2)
+
+    ax[0].set_xlim((-20.0, 20.0))
+    ax[0].set_ylim((-20.0, 20.0))
+    ax[1].set_xlim((-20.0, 20.0))
+    ax[1].set_ylim((-20.0, 20.0))
+
+    ax[0].set_title("MEE shifts")
+    ax[1].set_title("CHM shifts")
+    plt.suptitle("Shifts")
+    plt.show()

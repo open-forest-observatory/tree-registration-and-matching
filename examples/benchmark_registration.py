@@ -8,7 +8,9 @@ import pandas as pd
 
 from tree_registration_and_matching.benchmark import score_approach
 from tree_registration_and_matching.constants import DATA_DIR
-from tree_registration_and_matching.register_CHM import find_best_shift
+from tree_registration_and_matching.register_CHM import (
+    find_best_shift,
+)  # , rank_corr_func
 
 DETECTED_TREES = Path(DATA_DIR, "ofo-tree-registration", "detected-trees.gpkg")
 CHMS = Path(DATA_DIR, "ofo-tree-registration", "CHMs")
@@ -20,6 +22,7 @@ SHIFT_CRS = 26910
 
 OUTPUT_FOLDER = Path(DATA_DIR, "benchmarking_results")
 OUTPUT_CHM = Path(OUTPUT_FOLDER, "shifts_CHM.npy")
+OUTPUT_CHM_RANK = Path(OUTPUT_FOLDER, "shifts_CHM_rank.npy")
 OUTPUT_MEE = Path(OUTPUT_FOLDER, "shifts_MEE.npy")
 
 OUTPUT_FOLDER.mkdir(exist_ok=True, parents=True)
@@ -31,6 +34,7 @@ PLOT_BUFFER_DIST = 20
 
 RUN_MEE = False
 RUN_CHM = False
+RUN_CHM_RANK = False
 VIS = True
 
 # An m3.2xl node has 64 CPU cores
@@ -88,6 +92,36 @@ if RUN_CHM:
     )
     np.save(
         OUTPUT_CHM,
+        shifts_CHM,
+    )
+
+if RUN_CHM_RANK:
+
+    def find_best_shift_specialized(tree_points, CHM, plot_bounds):
+        return find_best_shift(
+            tree_points=tree_points,
+            CHM=CHM,
+            plot_bounds=plot_bounds,
+            x_range=RANGES,
+            y_range=RANGES,
+            comparison_func=rank_corr_func,
+        )
+
+    shifts_CHM = score_approach(
+        field_trees_file=FIELD_TREES,
+        CHMs_or_detected_trees=CHMS,
+        plots_file=PLOTS_FILE,
+        shifts=shifts,
+        shift_CRS=SHIFT_CRS,
+        alignment_algorithm=find_best_shift_specialized,
+        CHM_approach=True,
+        crop_to_plot_bounds=True,
+        plot_buffer_distance=PLOT_BUFFER_DIST,
+        vis_plots=False,
+        n_workers=N_WORKERS,
+    )
+    np.save(
+        OUTPUT_CHM_RANK,
         shifts_CHM,
     )
 
@@ -195,26 +229,11 @@ if VIS:
     ax[0].scatter(MEE_diffs[:, 0], MEE_diffs[:, 1], alpha=0.2)
     ax[1].scatter(CHM_diffs[:, 0], CHM_diffs[:, 1], alpha=0.2)
 
-    ax[0].set_xlim((-20.0, 20.0))
-    ax[0].set_ylim((-20.0, 20.0))
-    ax[1].set_xlim((-20.0, 20.0))
-    ax[1].set_ylim((-20.0, 20.0))
+    ax[0].set_xlim((-30.0, 30.0))
+    ax[0].set_ylim((-30.0, 30.0))
+    ax[1].set_xlim((-30.0, 30.0))
+    ax[1].set_ylim((-30.0, 30.0))
 
     ax[0].set_title("MEE displacement errors")
     ax[1].set_title("CHM displacement errors")
-    plt.show()
-
-    # Show the x, y coordinates of the errors for the two approaches on separate subplots
-    f, ax = plt.subplots(1, 2)
-    ax[0].scatter(MEE_shifts[:, 0], MEE_shifts[:, 1], alpha=0.2)
-    ax[1].scatter(CHM_shifts[:, 0], CHM_shifts[:, 1], alpha=0.2)
-
-    ax[0].set_xlim((-20.0, 20.0))
-    ax[0].set_ylim((-20.0, 20.0))
-    ax[1].set_xlim((-20.0, 20.0))
-    ax[1].set_ylim((-20.0, 20.0))
-
-    ax[0].set_title("MEE shifts")
-    ax[1].set_title("CHM shifts")
-    plt.suptitle("Shifts")
     plt.show()
