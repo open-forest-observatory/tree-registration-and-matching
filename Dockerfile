@@ -18,3 +18,6 @@ COPY . /app
 
 # Install the module dependencies with poetry without creating a virtual environment
 RUN /root/.local/bin/poetry config virtualenvs.create false && /root/.local/bin/poetry install
+
+# Add the trees to CHM registration as the primary command
+CMD python /app/tree_registration_and_matching/entrypoints/register_trees_to_CHM.py
