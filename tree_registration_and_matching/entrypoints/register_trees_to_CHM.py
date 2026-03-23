@@ -1,11 +1,77 @@
 import argparse
 from pathlib import Path
+from typing import Optional
 
 import geopandas as gpd
+import numpy as np
 import rasterio as rio
 
 from tree_registration_and_matching.register_CHM import find_best_shift
 from tree_registration_and_matching.utils import ensure_projected_CRS
+
+
+def cleanup_field_trees(
+    ground_reference_trees: gpd.GeoDataFrame,
+    min_height: Optional[float] = None,
+    height_col: str = "height",
+) -> gpd.GeoDataFrame:
+    """
+    Perform a variety of operations to standardize the data for matching
+    * Remove decaying and dead trees
+    * Ensure height is present, estimating allometrically from the "dbh" column if needed
+    * Remove trees shorter than a cutoff, if requested
+
+    Args:
+        ground_reference_trees (gpd.GeoDataFrame):
+            must have the 'dbh' column and heights represented by the column noted in height_col
+        min_height (Optional[float], optional):
+            If provided, the data will be filtered to only trees with a height greater than this.
+            Defaults to None.
+        height_col (str, optional):
+            Which column to treat as the height. Defaults to "height".
+
+    Returns:
+        gpd.GeoDataFrame: The trees with the height_col completely filled and short trees optioanlly removed
+    """
+    # The decay class specifies how severely a dead trees is decaying. At values above decay class 2,
+    # it is expected that the stem may be broken. This would cause issues estimating the height from
+    # DBH, and likely suggests a tree that will overall not be reconstructed well. Therefore, these
+    # trees are dropped prior to matching.
+    ground_reference_trees = ground_reference_trees[
+        ~(ground_reference_trees.decay_class > 2)
+    ]
+
+    # First replace any missing height values with pre-computed allometric values
+    nan_height = ground_reference_trees[height_col].isna()
+    ground_reference_trees[nan_height][height_col] = ground_reference_trees[
+        nan_height
+    ].height_allometric
+
+    # For any remaining missing height values that have DBH, use an allometric equation to compute
+    # the height
+    nan_height = ground_reference_trees[height_col].isna()
+    # These parameters were fit on paired height, DBH data from this dataset.
+    allometric_height_func = lambda x: 1.3 + np.exp(
+        -0.3136489123372108 + 0.84623571 * np.log(x)
+    )
+    # Compute the allometric height and assign it
+    allometric_height = allometric_height_func(
+        ground_reference_trees[nan_height].dbh.to_numpy()
+    )
+    ground_reference_trees.loc[nan_height, height_col] = allometric_height
+
+    # Filter out any trees that still don't have height
+    ground_reference_trees = ground_reference_trees[
+        ~ground_reference_trees[height_col].isna()
+    ]
+
+    # Remove short trees if requested
+    if min_height is not None:
+        ground_reference_trees = ground_reference_trees[
+            ground_reference_trees[height_col] > min_height
+        ]
+
+    return ground_reference_trees
 
 
 def register_trees_to_CHM(
@@ -13,6 +79,7 @@ def register_trees_to_CHM(
     CHM_file: Path,
     output_shifted_trees: Path,
     height_col: str = "height",
+    min_tree_height: Optional[float] = None,
     x_range: tuple = (-10, 10, 1),
     y_range: tuple = (-10, 10, 1),
     vis: bool = False,
@@ -35,6 +102,8 @@ def register_trees_to_CHM(
         height_col (str):
             Name of the column in the tree points file containing measured tree heights.
             Defaults to "height".
+        min_tree_height (float, optional):
+            The minimum height to use for registration. All trees are retained in the shifted output.
         x_range (tuple):
             Search range for x (easting) offsets as three values: start, stop, step.
             Defaults to (-10, 10, 1).
@@ -54,9 +123,12 @@ def register_trees_to_CHM(
     # Ensure a projected CRS is used for registration
     tree_points = ensure_projected_CRS(tree_points)
 
+    # Cleanup tree points, ensuring all have a height column
+    cleaned_tree_points = cleanup_field_trees(tree_points, min_height=min_tree_height)
+
     # Run registration
     estimated_shift, metrics = find_best_shift(
-        tree_points=tree_points,
+        tree_points=cleaned_tree_points,
         CHM=CHM,
         height_col=height_col,
         x_range=x_range,
@@ -123,6 +195,9 @@ def parse_args():
         "--height-col",
         default="height",
         help="Name of the height column in the tree points file. Defaults to 'height'.",
+    )
+    parser.add_argument(
+        "--min-tree-height", help="Only use trees above this height for registration."
     )
     parser.add_argument(
         "--x-range",
