@@ -11,7 +11,7 @@ from tree_registration_and_matching.utils import ensure_projected_CRS
 def register_trees_to_CHM(
     tree_points_file: Path,
     CHM_file: Path,
-    output_file: Path,
+    output_shifted_trees: Path,
     height_col: str = "height",
     x_range: tuple = (-10, 10, 1),
     y_range: tuple = (-10, 10, 1),
@@ -29,7 +29,7 @@ def register_trees_to_CHM(
             include a column with tree heights specified by `height_col`.
         CHM_file (Path):
             Path to the canopy height model raster file.
-        output_file (Path):
+        output_shifted_trees (Path):
             Path to save the shifted tree points. The format is inferred from the file
             extension (e.g. .gpkg, .shp, .geojson).
         height_col (str):
@@ -77,7 +77,8 @@ def register_trees_to_CHM(
     tree_points.to_crs(original_CRS, inplace=True)
 
     # Save out
-    tree_points.to_file(output_file)
+    Path(output_shifted_trees).parent.mkdir(exist_ok=True, parents=True)
+    tree_points.to_file(output_shifted_trees)
 
 
 def parse_args():
@@ -113,7 +114,7 @@ def parse_args():
         help="Path to the canopy height model raster file.",
     )
     parser.add_argument(
-        "--output-file",
+        "--output-shifted-trees",
         type=Path,
         required=True,
         help="Path to save the shifted tree points (format inferred from extension).",
