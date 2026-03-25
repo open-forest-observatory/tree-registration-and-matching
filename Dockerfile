@@ -5,7 +5,7 @@ from python:3.12-slim
 RUN export DEBIAN_FRONTEND=noninteractive && \
     apt-get update && \
     apt-get install -y \
-    curl && \
+    curl libexpat1 && \
     rm -rf /var/lib/apt/lists/*
 
 # Install poetry
