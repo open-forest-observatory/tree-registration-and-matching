@@ -9,6 +9,8 @@ import rasterio as rio
 from tree_registration_and_matching.register_CHM import find_best_shift
 from tree_registration_and_matching.utils import ensure_projected_CRS
 
+MIN_TREE_HEIGHT = 5.0
+
 
 def cleanup_field_trees(
     ground_reference_trees: gpd.GeoDataFrame,
@@ -79,7 +81,7 @@ def register_trees_to_CHM(
     CHM_file: Path,
     output_shifted_trees: Path,
     height_col: str = "height",
-    min_tree_height: Optional[float] = None,
+    min_tree_height: Optional[float] = MIN_TREE_HEIGHT,
     x_range: tuple = (-10, 10, 1),
     y_range: tuple = (-10, 10, 1),
     vis: bool = False,
@@ -104,6 +106,7 @@ def register_trees_to_CHM(
             Defaults to "height".
         min_tree_height (float, optional):
             The minimum height to use for registration. All trees are retained in the shifted output.
+            Defaults to 5.0.
         x_range (tuple):
             Search range for x (easting) offsets as three values: start, stop, step.
             Defaults to (-10, 10, 1).
@@ -198,6 +201,7 @@ def parse_args():
     )
     parser.add_argument(
         "--min-tree-height", help="Only use trees above this height for registration."
+        , default=MIN_TREE_HEIGHT
     )
     parser.add_argument(
         "--x-range",
