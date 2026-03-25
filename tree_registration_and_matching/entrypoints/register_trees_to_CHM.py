@@ -10,6 +10,7 @@ from tree_registration_and_matching.register_CHM import find_best_shift
 from tree_registration_and_matching.utils import ensure_projected_CRS
 
 MIN_TREE_HEIGHT = 5.0
+SHIFT_RANGE = (-10, 10, 1)
 
 
 def cleanup_field_trees(
@@ -208,7 +209,7 @@ def parse_args():
         "--x-range",
         type=float,
         nargs=3,
-        default=(-10, 10, 1),
+        default=SHIFT_RANGE,
         metavar=("START", "STOP", "STEP"),
         help="Search range for x offsets as three values: start stop step. Defaults to -10 10 1.",
     )
@@ -216,7 +217,7 @@ def parse_args():
         "--y-range",
         type=float,
         nargs=3,
-        default=(-10, 10, 1),
+        default=SHIFT_RANGE,
         metavar=("START", "STOP", "STEP"),
         help="Search range for y offsets as three values: start stop step. Defaults to -10 10 1.",
     )
