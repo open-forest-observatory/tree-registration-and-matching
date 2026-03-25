@@ -200,8 +200,9 @@ def parse_args():
         help="Name of the height column in the tree points file. Defaults to 'height'.",
     )
     parser.add_argument(
-        "--min-tree-height", help="Only use trees above this height for registration."
-        , default=MIN_TREE_HEIGHT
+        "--min-tree-height",
+        help="Only use trees above this height for registration.",
+        default=MIN_TREE_HEIGHT,
     )
     parser.add_argument(
         "--x-range",
