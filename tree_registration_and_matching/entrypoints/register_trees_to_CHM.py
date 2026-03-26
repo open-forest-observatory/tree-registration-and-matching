@@ -20,13 +20,13 @@ def cleanup_field_trees(
 ) -> gpd.GeoDataFrame:
     """
     Perform a variety of operations to standardize the data for matching
-    * Remove decaying and dead trees
+    * Remove dead trees
     * Ensure height is present, estimating allometrically from the "dbh" column if needed
     * Remove trees shorter than a cutoff, if requested
 
     Args:
         ground_reference_trees (gpd.GeoDataFrame):
-            must have the 'dbh' column and heights represented by the column noted in height_col
+            must have the 'dbh' and 'live_dead' columns and heights represented by the column noted in height_col
         min_height (Optional[float], optional):
             If provided, the data will be filtered to only trees with a height greater than this.
             Defaults to None.
@@ -36,13 +36,8 @@ def cleanup_field_trees(
     Returns:
         gpd.GeoDataFrame: The trees with the height_col completely filled and short trees optioanlly removed
     """
-    # The decay class specifies how severely a dead trees is decaying. At values above decay class 2,
-    # it is expected that the stem may be broken. This would cause issues estimating the height from
-    # DBH, and likely suggests a tree that will overall not be reconstructed well. Therefore, these
-    # trees are dropped prior to matching.
-    ground_reference_trees = ground_reference_trees[
-        ~(ground_reference_trees.decay_class > 2)
-    ]
+    # Remove any trees marked explicitly as dead
+    ground_reference_trees = ground_reference_trees[ground_reference_trees.live_dead != "D"]
 
     # First replace any missing height values with pre-computed allometric values
     nan_height = ground_reference_trees[height_col].isna()
