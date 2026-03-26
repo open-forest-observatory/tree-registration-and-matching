@@ -37,7 +37,9 @@ def cleanup_field_trees(
         gpd.GeoDataFrame: The trees with the height_col completely filled and short trees optioanlly removed
     """
     # Remove any trees marked explicitly as dead
-    ground_reference_trees = ground_reference_trees[ground_reference_trees.live_dead != "D"]
+    ground_reference_trees = ground_reference_trees[
+        ground_reference_trees.live_dead != "D"
+    ]
 
     # First replace any missing height values with pre-computed allometric values
     nan_height = ground_reference_trees[height_col].isna()
