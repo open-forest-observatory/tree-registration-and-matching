@@ -159,15 +159,17 @@ def register_trees_to_CHM(
     if output_shift_summary:
         # Store the shift and associated metadata
         summary_df = pd.DataFrame(
-            [{
-                "estimated_shift_x": estimated_shift[0],
-                "estimated_shift_y": estimated_shift[1],
-                "shift_CRS": shift_CRS,
-                "optimal_correlation": metrics["best_correlation"],
-                "ratio_quality_metric": metrics["ratio"],
-                "n_shift_trees": len(cleaned_tree_points),
-                "CHM_file": CHM_file,
-            }]
+            [
+                {
+                    "estimated_shift_x": estimated_shift[0],
+                    "estimated_shift_y": estimated_shift[1],
+                    "shift_CRS": shift_CRS,
+                    "optimal_correlation": metrics["best_correlation"],
+                    "ratio_quality_metric": metrics["ratio"],
+                    "n_shift_trees": len(cleaned_tree_points),
+                    "CHM_file": CHM_file,
+                }
+            ]
         )
 
         # Save out the summary
