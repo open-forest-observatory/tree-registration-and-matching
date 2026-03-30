@@ -11,7 +11,9 @@ from tree_registration_and_matching.register_CHM import find_best_shift
 from tree_registration_and_matching.utils import ensure_projected_CRS
 
 MIN_TREE_HEIGHT = 5.0
-SHIFT_RANGE = (-10, 10, 1)
+
+COARSE_RANGE = (-10, 10, 1)
+FINE_RANGE = (-2, 2, 0.2)
 
 
 def cleanup_field_trees(
@@ -82,8 +84,8 @@ def register_trees_to_CHM(
     output_shift_summary: Optional[Path] = None,
     height_col: str = "height",
     min_tree_height: Optional[float] = MIN_TREE_HEIGHT,
-    x_range: tuple = (-10, 10, 1),
-    y_range: tuple = (-10, 10, 1),
+    coarse_range: tuple = COARSE_RANGE,
+    fine_range: tuple = FINE_RANGE,
     vis: bool = False,
 ):
     """Shift field-measured tree points to best align with a canopy height model (CHM).
@@ -110,12 +112,12 @@ def register_trees_to_CHM(
         min_tree_height (float, optional):
             The minimum height to use for registration. All trees are retained in the shifted output.
             Defaults to 5.0.
-        x_range (tuple):
-            Search range for x (easting) offsets as three values: start, stop, step.
+        coarse_range (tuple):
+            Search range for the initial coarse offsets as three values: start, stop, step.
             Defaults to (-10, 10, 1).
-        y_range (tuple):
-            Search range for y (northing) offsets as three values: start, stop, step.
-            Defaults to (-10, 10, 1).
+        fine_range (tuple):
+            Search range for the secondary fine shift offsets as three values: start, stop, step. This shift is
+            centered at the optimal value identified by the coarse shift. Defaults to (-2, 2, 0.2).
         vis (bool):
             If True, show interactive visualizations of the correlation surface.
             Defaults to False.
@@ -134,20 +136,38 @@ def register_trees_to_CHM(
     # Cleanup tree points, ensuring all have a height column
     cleaned_tree_points = cleanup_field_trees(tree_points, min_height=min_tree_height)
 
-    # Run registration
-    estimated_shift, metrics = find_best_shift(
+    # Run coarse registration
+    coarse_shift, coarse_metrics = find_best_shift(
         tree_points=cleaned_tree_points,
         CHM=CHM,
         height_col=height_col,
-        x_range=x_range,
-        y_range=y_range,
+        x_range=coarse_range,
+        y_range=coarse_range,
+        vis=vis,
+    )
+    # Run fine registration
+    # The range start and stops are shifted by the amount identified in the coarse shift
+    fine_shift, fine_metrics = find_best_shift(
+        tree_points=cleaned_tree_points,
+        CHM=CHM,
+        height_col=height_col,
+        x_range=(
+            fine_range[0] + coarse_shift[0],
+            fine_range[1] + coarse_shift[0],
+            fine_range[2],
+        ),
+        y_range=(
+            fine_range[0] + coarse_shift[1],
+            fine_range[1] + coarse_shift[1],
+            fine_range[2],
+        ),
         vis=vis,
     )
 
     if output_shifted_trees is not None:
         # Apply the shift and save
         tree_points.geometry = tree_points.geometry.translate(
-            xoff=estimated_shift[0], yoff=estimated_shift[1]
+            xoff=fine_shift[0], yoff=fine_shift[1]
         )
         # Transform back to original CRS
         tree_points.to_crs(original_CRS, inplace=True)
@@ -158,14 +178,18 @@ def register_trees_to_CHM(
 
     if output_shift_summary:
         # Store the shift and associated metadata
+        # Note that the optimal correlation represents the best value found in the fine shift,
+        # which corresponds to the reported shift. However, the ratio test is performed on the
+        # coarse grid, because this covers a larger spatial areas which is better at determining
+        # the quality of the shift compared to other options.
         summary_df = pd.DataFrame(
             [
                 {
-                    "estimated_shift_x": estimated_shift[0],
-                    "estimated_shift_y": estimated_shift[1],
+                    "estimated_shift_x": fine_shift[0],
+                    "estimated_shift_y": fine_shift[1],
                     "shift_CRS": shift_CRS,
-                    "optimal_correlation": metrics["best_correlation"],
-                    "ratio_quality_metric": metrics["ratio"],
+                    "optimal_correlation": fine_metrics["best_correlation"],
+                    "ratio_quality_metric": coarse_metrics["ratio"],
                     "n_shift_trees": len(cleaned_tree_points),
                     "CHM_file": CHM_file,
                 }
@@ -230,20 +254,20 @@ def parse_args():
         default=MIN_TREE_HEIGHT,
     )
     parser.add_argument(
-        "--x-range",
+        "--coarse-range",
         type=float,
         nargs=3,
-        default=SHIFT_RANGE,
+        default=COARSE_RANGE,
         metavar=("START", "STOP", "STEP"),
-        help="Search range for x offsets as three values: start stop step. Defaults to -10 10 1.",
+        help="Search range for the initial coarse offsets as three values: start stop step. Defaults to -10 10 1.",
     )
     parser.add_argument(
-        "--y-range",
+        "--fine-range",
         type=float,
         nargs=3,
-        default=SHIFT_RANGE,
+        default=FINE_RANGE,
         metavar=("START", "STOP", "STEP"),
-        help="Search range for y offsets as three values: start stop step. Defaults to -10 10 1.",
+        help="Search range for the secondary fine shift offsets as three values: start stop step. Defaults to -2 2 0.2.",
     )
     parser.add_argument(
         "--vis",
