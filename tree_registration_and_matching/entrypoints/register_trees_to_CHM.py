@@ -4,6 +4,7 @@ from typing import Optional
 
 import geopandas as gpd
 import numpy as np
+import pandas as pd
 import rasterio as rio
 
 from tree_registration_and_matching.register_CHM import find_best_shift
@@ -37,7 +38,9 @@ def cleanup_field_trees(
         gpd.GeoDataFrame: The trees with the height_col completely filled and short trees optioanlly removed
     """
     # Remove any trees marked explicitly as dead
-    ground_reference_trees = ground_reference_trees[ground_reference_trees.live_dead != "D"]
+    ground_reference_trees = ground_reference_trees[
+        ground_reference_trees.live_dead != "D"
+    ]
 
     # First replace any missing height values with pre-computed allometric values
     nan_height = ground_reference_trees[height_col].isna()
@@ -75,7 +78,8 @@ def cleanup_field_trees(
 def register_trees_to_CHM(
     tree_points_file: Path,
     CHM_file: Path,
-    output_shifted_trees: Path,
+    output_shifted_trees: Optional[Path] = None,
+    output_shift_summary: Optional[Path] = None,
     height_col: str = "height",
     min_tree_height: Optional[float] = MIN_TREE_HEIGHT,
     x_range: tuple = (-10, 10, 1),
@@ -94,9 +98,12 @@ def register_trees_to_CHM(
             include a column with tree heights specified by `height_col`.
         CHM_file (Path):
             Path to the canopy height model raster file.
-        output_shifted_trees (Path):
-            Path to save the shifted tree points. The format is inferred from the file
-            extension (e.g. .gpkg, .shp, .geojson).
+        output_shifted_trees (Path, optional):
+            Path to save the shifted tree points. If not provided, the shifted points will not be saved.
+            Defaults to None.
+        output_shift_summary (Path, optional):
+            Path to save the summary of the shift. The file path should have a csv extension. If not provided,
+            the summary will not be provided. Defaults to None.
         height_col (str):
             Name of the column in the tree points file containing measured tree heights.
             Defaults to "height".
@@ -121,6 +128,8 @@ def register_trees_to_CHM(
     original_CRS = tree_points.crs
     # Ensure a projected CRS is used for registration
     tree_points = ensure_projected_CRS(tree_points)
+    # Record the CRS that the shift should be interpreted in
+    shift_CRS = tree_points.crs
 
     # Cleanup tree points, ensuring all have a height column
     cleaned_tree_points = cleanup_field_trees(tree_points, min_height=min_tree_height)
@@ -135,21 +144,35 @@ def register_trees_to_CHM(
         vis=vis,
     )
 
-    # Print metadata to stdout
-    print(f"Optimal shift (dx, dy): {estimated_shift}")
-    print(f"Best correlation: {metrics['best_correlation']}")
-    print(f"Quality ratio (second-best / best): {metrics['ratio']}")
+    if output_shifted_trees is not None:
+        # Apply the shift and save
+        tree_points.geometry = tree_points.geometry.translate(
+            xoff=estimated_shift[0], yoff=estimated_shift[1]
+        )
+        # Transform back to original CRS
+        tree_points.to_crs(original_CRS, inplace=True)
 
-    # Apply the shift and save
-    tree_points.geometry = tree_points.geometry.translate(
-        xoff=estimated_shift[0], yoff=estimated_shift[1]
-    )
-    # Transform back to original CRS
-    tree_points.to_crs(original_CRS, inplace=True)
+        # Save out
+        Path(output_shifted_trees).parent.mkdir(exist_ok=True, parents=True)
+        tree_points.to_file(output_shifted_trees)
 
-    # Save out
-    Path(output_shifted_trees).parent.mkdir(exist_ok=True, parents=True)
-    tree_points.to_file(output_shifted_trees)
+    if output_shift_summary:
+        # Store the shift and associated metadata
+        summary_df = pd.DataFrame(
+            [{
+                "estimated_shift_x": estimated_shift[0],
+                "estimated_shift_y": estimated_shift[1],
+                "shift_CRS": shift_CRS,
+                "optimal_correlation": metrics["best_correlation"],
+                "ratio_quality_metric": metrics["ratio"],
+                "n_shift_trees": len(cleaned_tree_points),
+                "CHM_file": CHM_file,
+            }]
+        )
+
+        # Save out the summary
+        Path(output_shift_summary).parent.mkdir(exist_ok=True, parents=True)
+        summary_df.to_csv(output_shift_summary, index=False)
 
 
 def parse_args():
@@ -187,8 +210,12 @@ def parse_args():
     parser.add_argument(
         "--output-shifted-trees",
         type=Path,
-        required=True,
         help="Path to save the shifted tree points (format inferred from extension).",
+    )
+    parser.add_argument(
+        "--output-shift-summary",
+        type=Path,
+        help="Path to save the summary of the shift. The file should have a .csv extension.",
     )
     parser.add_argument(
         "--height-col",
