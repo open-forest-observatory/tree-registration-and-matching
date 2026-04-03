@@ -145,24 +145,30 @@ def register_trees_to_CHM(
         y_range=coarse_range,
         vis=vis,
     )
-    # Run fine registration
-    # The range start and stops are shifted by the amount identified in the coarse shift
-    fine_shift, fine_metrics = find_best_shift(
-        tree_points=cleaned_tree_points,
-        CHM=CHM,
-        height_col=height_col,
-        x_range=(
-            fine_range[0] + coarse_shift[0],
-            fine_range[1] + coarse_shift[0],
-            fine_range[2],
-        ),
-        y_range=(
-            fine_range[0] + coarse_shift[1],
-            fine_range[1] + coarse_shift[1],
-            fine_range[2],
-        ),
-        vis=vis,
-    )
+
+    # Check if the first step failed
+    if np.all(np.isfinite(coarse_shift)):
+        # Run fine registration
+        # The range start and stops are shifted by the amount identified in the coarse shift
+        fine_shift, fine_metrics = find_best_shift(
+            tree_points=cleaned_tree_points,
+            CHM=CHM,
+            height_col=height_col,
+            x_range=(
+                fine_range[0] + coarse_shift[0],
+                fine_range[1] + coarse_shift[0],
+                fine_range[2],
+            ),
+            y_range=(
+                fine_range[0] + coarse_shift[1],
+                fine_range[1] + coarse_shift[1],
+                fine_range[2],
+            ),
+            vis=vis,
+        )
+    else:
+        fine_shift = (np.nan, np.nan)
+        fine_metrics = {"best_correlation": np.nan}
 
     if output_shifted_trees is not None:
         # Apply the shift and save
@@ -198,7 +204,7 @@ def register_trees_to_CHM(
 
         # Save out the summary
         Path(output_shift_summary).parent.mkdir(exist_ok=True, parents=True)
-        summary_df.to_csv(output_shift_summary, index=False)
+        summary_df.to_csv(output_shift_summary, index=False, na_rep="NaN")
 
 
 def parse_args():
