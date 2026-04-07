@@ -1,7 +1,8 @@
 import geopandas as gpd
 import numpy as np
+import pandas as pd
 
-from tree_registration_and_matching.register_MEE import match_trees_singlestratum
+from tree_registration_and_matching.eval import match_trees_singlestratum
 from tree_registration_and_matching.utils import ensure_projected_CRS
 
 
@@ -11,6 +12,7 @@ def match_field_and_drone_trees(
     drone_crowns: gpd.GeoDataFrame,
     field_perim: gpd.GeoDataFrame,
     field_buffer_dist: float = 10.0,
+    keep_only_matched_crowns: bool = False,
 ) -> gpd.GeoDataFrame:
     """
     Add information from the field points to the drone crowns, using the corresponding tree tops
@@ -22,6 +24,7 @@ def match_field_and_drone_trees(
         drone_crowns (gpd.GeoDataFrame): The detected crowns
         field_perim (gpd.GeoDataFrame): GeoDataFrame with a single polygon geometry representing the surveyed area corresponding
         field_buffer_dist (float, optional): Consider matching to drone trees within this distance of the field trees. Defaults to 10.0.
+        keep_only_matched_crowns (bool, optional): Whether to keep only the crowns that have matched field trees. Defaults to False.
 
     Returns:
         gpd.GeoDataFrame: Drone crowns with additional attributes from the field survey
@@ -45,8 +48,9 @@ def match_field_and_drone_trees(
         field_trees=field_trees, drone_trees=drone_trees, vis=False
     )
 
-    # Compute field trees that were matched
-    matched_field_trees = field_trees.iloc[matched_field_tree_inds]
+    # Compute field trees that were matched. Take a copy to avoid a warning about modifying a
+    # a view.
+    matched_field_trees = field_trees.iloc[matched_field_tree_inds].copy()
     # Drop the geometry from the field trees since we don't want to keep it
     matched_field_trees.drop("geometry", axis=1, inplace=True)
     # Compute the "unique_ID" for matched drone trees. This is a crosswalk with the
@@ -59,13 +63,16 @@ def match_field_and_drone_trees(
     # drone_tree_unique_ID as a column of the field trees and then merge based on that. But we don't
     # want to modify the dataframe, so it's just provided for the `merge` step.
 
+    # Determine which rows to retain, only the matched ones or all drone crowns.
+    how = "inner" if keep_only_matched_crowns else "left"
+
     # Transfer the attributes to the drone trees.
     drone_crowns_with_additional_attributes = pd.merge(
         left=drone_crowns,
         right=matched_field_trees,
         left_on="treetop_unique_ID",
         right_on=drone_tree_unique_IDs,
-        how="left",
+        how=how,
         suffixes=(
             "_drone",
             "_field",
