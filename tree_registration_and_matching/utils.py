@@ -63,6 +63,49 @@ def cdist(x, y):
     return pairwise_distances
 
 
+def ensure_height_is_present(
+    ground_reference_trees: gpd.GeoDataFrame,
+) -> gpd.GeoDataFrame:
+    """
+    Ensure that every row has a height attribute with the following proceedure:
+    * If height is present, this is used
+    * Then, fill in with height_allometric
+    * Then, fill in with allometric height derived from DBH
+    * Finally, drop any trees without a height
+
+    Args:
+        ground_reference_trees (gpd.GeoDataFrame): The trees to add height to
+
+    Returns:
+        gpd.GeoDataFrame: The ground reference trees with every row having the height attributes
+    """
+    # First replace any missing height values with pre-computed allometric values
+    nan_height = ground_reference_trees.height.isna()
+    ground_reference_trees[nan_height].height = ground_reference_trees[
+        nan_height
+    ].height_allometric
+
+    # For any remaining missing height values that have DBH, use an allometric equation to compute
+    # the height
+    nan_height = ground_reference_trees.height.isna()
+    # These parameters were fit on paired height, DBH data from Western conifers dataset.
+    allometric_height_func = lambda x: 1.3 + np.exp(
+        -0.3136489123372108 + 0.84623571 * np.log(x)
+    )
+    # Compute the allometric height and assign it
+    allometric_height = allometric_height_func(
+        ground_reference_trees[nan_height].dbh.to_numpy()
+    )
+    ground_reference_trees.loc[nan_height, "height"] = allometric_height
+
+    # Filter out any trees that still don't have height
+    ground_reference_trees = ground_reference_trees[
+        ~ground_reference_trees.height.isna()
+    ]
+
+    return ground_reference_trees
+
+
 def is_overstory(tree_dataset: gpd.GeoDataFrame, heights_column="height"):
     """
     Compute which trees are in the overstory based on heights and locations
