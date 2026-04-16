@@ -62,7 +62,10 @@ def cdist(x, y):
 
     return pairwise_distances
 
-def ensure_height_is_present(ground_reference_trees: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+
+def ensure_height_is_present(
+    ground_reference_trees: gpd.GeoDataFrame,
+) -> gpd.GeoDataFrame:
     """
     Ensure that every row has a height attribute with the following proceedure:
     * If height is present, this is used
