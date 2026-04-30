@@ -66,6 +66,20 @@ def L2(sampled_heights, provided_heights):
     return -metric
 
 
+def average_frac_difference(sampled_heights, provided_heights):
+    # Returns the average fraction that the sampled height is from the provided height. Note that
+    # this is defined as the fraction different the smaller one is from the larger one, meaning both
+    # 0.5 vs. 1.0 and 2.0 vs. 1.0 both yield 0.5 difference.
+    mask = np.isfinite(sampled_heights) & np.isfinite(provided_heights)
+
+    ratios = sampled_heights[mask] / provided_heights[mask]
+    # Take the reciprocal of any over 1
+    ratios = np.where(ratios < 1, ratios, 1 / ratios)
+
+    # Take the mean of diffences from 1
+    return np.mean(1 - ratios)
+
+
 def compute_m2_m1_ratio(
     metrics_img: np.array,
     best_shift: tuple,
@@ -133,6 +147,18 @@ def compute_m2_m1_ratio(
     return ratio
 
 
+def sample_heights(CHM, xy_points, dx, dy):
+    """Convenience function to sample heights from the CHM after translating them by dx, dy"""
+    shifted_xy_points = xy_points + np.array([dx, dy])
+
+    # Query the CHM values at the shifted points
+    sampled_heights = np.array(
+        list(rio.sample.sample_gen(CHM, shifted_xy_points))
+    ).squeeze()
+
+    return sampled_heights
+
+
 def find_best_shift(
     tree_points,
     CHM,
@@ -196,16 +222,10 @@ def find_best_shift(
 
     # Iterate over the grid of possible shifts
     for dx, dy in shifts:
-        # Apply the shift to the initial tree locations
-        shifted_xy_points = xy_points + np.array([dx, dy])
+        sampled_heights = sample_heights(CHM=CHM, xy_points=xy_points, dx=dx, dy=dy)
 
-        # Query the CHM values at the shifted points
-        sampled_heights = np.array(
-            list(rio.sample.sample_gen(CHM, shifted_xy_points))
-        ).squeeze()
-
-        # Compute the metric comparing the provided and sampled heights
-        metrics.append(comparison_func(provided_heights, sampled_heights))
+        # Compute the metric comparing the sampled and provided heights
+        metrics.append(comparison_func(sampled_heights, provided_heights))
 
     # Create a 2D representation of the metrics, with the i dimension representing y shifts
     # TODO figure out if there's a top-bottom flip
@@ -232,6 +252,13 @@ def find_best_shift(
             vis=vis,
         )
 
+    # Compute fraction difference between real and predicted as a diagnostic metric
+    sampled_heights = sample_heights(
+        CHM=CHM, xy_points=xy_points, dx=best_shift[0], dy=best_shift[1]
+    )
+
+    average_error_frac = average_frac_difference(sampled_heights, provided_heights)
+
     return best_shift, {
         "best_shift": best_shift,
         "best_correlation": float(best_metric) if not np.isnan(best_metric) else np.nan,
@@ -239,4 +266,5 @@ def find_best_shift(
         "x_vals": x_vals,
         "y_vals": y_vals,
         "ratio": ratio,
+        "average_error_frac": average_error_frac,
     }
