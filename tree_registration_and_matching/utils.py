@@ -117,11 +117,15 @@ def is_overstory(tree_dataset: gpd.GeoDataFrame, heights_column="height"):
     Returns:
         np.array: binary array representing which trees are overstory
     """
-    heights = tree_dataset[heights_column].values
-
     # If no trees are present, return an empty index
     if len(tree_dataset) == 0:
         return np.array([], dtype=bool)
+
+    # Ensure that the dataset is projected, which implies the units are meters
+    tree_dataset = ensure_projected_CRS(tree_dataset).copy()
+
+    # Extract heights
+    heights = tree_dataset[heights_column].values
 
     # Compute the difference in heights between different trees. This is the j axis minus the one on
     # the i axis
