@@ -8,7 +8,10 @@ import pandas as pd
 import rasterio as rio
 
 from tree_registration_and_matching.register_CHM import find_best_shift
-from tree_registration_and_matching.utils import ensure_projected_CRS, ensure_height_is_present
+from tree_registration_and_matching.utils import (
+    ensure_projected_CRS,
+    ensure_height_is_present,
+)
 
 MIN_TREE_HEIGHT = 5.0
 
@@ -45,7 +48,9 @@ def cleanup_field_trees(
     ]
 
     # Make sure every tree has a height value, dropping any for which height cannot be imputed
-    ground_reference_trees = ensure_height_is_present(ground_reference_trees, height_col=height_col)
+    ground_reference_trees = ensure_height_is_present(
+        ground_reference_trees, height_col=height_col
+    )
 
     # Remove short trees if requested
     if min_height is not None:
@@ -177,6 +182,7 @@ def register_trees_to_CHM(
                     "ratio_quality_metric": coarse_metrics["ratio"],
                     "n_shift_trees": len(cleaned_tree_points),
                     "CHM_file": CHM_file,
+                    "average_error_frac": fine_metrics["average_error_frac"],
                 }
             ]
         )
