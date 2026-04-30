@@ -8,7 +8,7 @@ import pandas as pd
 import rasterio as rio
 
 from tree_registration_and_matching.register_CHM import find_best_shift
-from tree_registration_and_matching.utils import ensure_projected_CRS
+from tree_registration_and_matching.utils import ensure_projected_CRS, ensure_height_is_present
 
 MIN_TREE_HEIGHT = 5.0
 
@@ -44,29 +44,8 @@ def cleanup_field_trees(
         ground_reference_trees.live_dead != "D"
     ]
 
-    # First replace any missing height values with pre-computed allometric values
-    nan_height = ground_reference_trees[height_col].isna()
-    ground_reference_trees[nan_height][height_col] = ground_reference_trees[
-        nan_height
-    ].height_allometric
-
-    # For any remaining missing height values that have DBH, use an allometric equation to compute
-    # the height
-    nan_height = ground_reference_trees[height_col].isna()
-    # These parameters were fit on paired height, DBH data from this dataset.
-    allometric_height_func = lambda x: 1.3 + np.exp(
-        -0.3136489123372108 + 0.84623571 * np.log(x)
-    )
-    # Compute the allometric height and assign it
-    allometric_height = allometric_height_func(
-        ground_reference_trees[nan_height].dbh.to_numpy()
-    )
-    ground_reference_trees.loc[nan_height, height_col] = allometric_height
-
-    # Filter out any trees that still don't have height
-    ground_reference_trees = ground_reference_trees[
-        ~ground_reference_trees[height_col].isna()
-    ]
+    # Make sure every tree has a height value, dropping any for which height cannot be imputed
+    ground_reference_trees = ensure_height_is_present(ground_reference_trees, height_col=height_col)
 
     # Remove short trees if requested
     if min_height is not None:
