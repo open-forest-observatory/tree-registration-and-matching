@@ -9,8 +9,8 @@ import rasterio as rio
 
 from tree_registration_and_matching.register_CHM import find_best_shift
 from tree_registration_and_matching.utils import (
-    ensure_projected_CRS,
     ensure_height_is_present,
+    ensure_projected_CRS,
 )
 
 MIN_TREE_HEIGHT = 5.0
