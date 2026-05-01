@@ -152,9 +152,10 @@ def sample_heights(CHM, xy_points, dx, dy):
     shifted_xy_points = xy_points + np.array([dx, dy])
 
     # Query the CHM values at the shifted points
-    sampled_heights = np.array(
-        list(rio.sample.sample_gen(CHM, shifted_xy_points))
-    ).squeeze()
+    sampled_heights = np.array(list(rio.sample.sample_gen(CHM, shifted_xy_points)))
+
+    # Remove the channel-wise dimension
+    sampled_heights = sampled_heights[:, 0]
 
     return sampled_heights
 
