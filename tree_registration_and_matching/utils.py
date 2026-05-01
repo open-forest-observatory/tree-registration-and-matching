@@ -84,7 +84,7 @@ def ensure_height_is_present(
     nan_height = ground_reference_trees.height.isna()
     ground_reference_trees.loc[nan_height, height_col] = ground_reference_trees[
         nan_height
-    ].height_allometric
+    ].height_allometric.astype(float)
 
     # For any remaining missing height values that have DBH, use an allometric equation to compute
     # the height
