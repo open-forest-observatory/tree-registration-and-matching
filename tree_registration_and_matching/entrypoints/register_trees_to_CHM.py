@@ -151,8 +151,10 @@ def register_trees_to_CHM(
             vis=vis,
         )
     else:
+        # Default the values that are reported in the final metrics in the case where coarse
+        # registration failed.
         fine_shift = (np.nan, np.nan)
-        fine_metrics = {"best_correlation": np.nan}
+        fine_metrics = {"best_correlation": np.nan, "average_error_frac": np.nan}
 
     if output_shifted_trees is not None:
         # Apply the shift and save
