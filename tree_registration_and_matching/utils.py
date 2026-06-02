@@ -24,8 +24,8 @@ def ensure_projected_CRS(geodata: gpd.GeoDataFrame):
     Returns:
         gpd.GeoDataGrame: projected geodataframe
     """
-    # If CRS is projected return immediately
-    if geodata.crs.is_projected:
+    # If empty or CRS is projected return immediately
+    if len(geodata) == 0 or geodata.crs.is_projected:
         return geodata
 
     # If CRS is geographic and not long-lat, convert it to long-lat
