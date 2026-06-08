@@ -10,7 +10,7 @@ from tree_registration_and_matching.utils import cdist
 def match_trees_singlestratum(
     field_trees,
     drone_trees,
-    search_height_proportion=0.5,
+    search_height_proportion=0.2,
     search_distance_fun_slope=0.1,
     search_distance_fun_intercept=1,
     height_col="height",
