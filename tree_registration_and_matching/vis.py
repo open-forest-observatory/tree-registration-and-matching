@@ -21,7 +21,7 @@ def plot_trees_on_CHM(
         tree_points (gpd.GeoDataFrame): Tree point locations, in the same CRS as the CHM.
         plot_bounds (gpd.GeoDataFrame, optional):
             Boundary of the field plot to outline, in the same CRS as the CHM. Not shown if not
-            provided. Defaults to None.
+            provided. If provided, the view is also cropped to its extent. Defaults to None.
         height_column (str, optional): Column in `tree_points` used to scale point size, so taller
             trees are shown as larger points. Defaults to "height".
         height_plotting_scale (float, optional):
@@ -49,6 +49,10 @@ def plot_trees_on_CHM(
         plot_bounds.plot(
             ax=ax, facecolor="none", edgecolor="cyan", linewidth=3, label="Plot bounds"
         )
+        # Crop the view to the extent of the plot bounds
+        minx, miny, maxx, maxy = plot_bounds.total_bounds
+        ax.set_xlim(minx, maxx)
+        ax.set_ylim(miny, maxy)
 
     # Show the tree points, sized by height
     tree_points.plot(
