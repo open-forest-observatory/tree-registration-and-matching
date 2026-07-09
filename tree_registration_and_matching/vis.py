@@ -4,8 +4,8 @@ import rasterio as rio
 from rasterio.plot import show
 
 
-def plot_trees_on_CHM(
-    CHM: rio.DatasetReader,
+def plot_trees_on_raster(
+    raster: rio.DatasetReader,
     tree_points: gpd.GeoDataFrame,
     plot_bounds: gpd.GeoDataFrame = None,
     height_column: str = "height",
@@ -13,14 +13,15 @@ def plot_trees_on_CHM(
     point_color: str = "red",
     title: str = None,
     ax: plt.Axes = None,
+    add_colorbar: bool = True,
 ):
-    """Visualize tree points overlaid on a CHM raster.
+    """Visualize tree points overlaid on a CHM or orthomosaic raster.
 
     Args:
-        CHM (rio.DatasetReader): An open rasterio dataset handle for the CHM.
-        tree_points (gpd.GeoDataFrame): Tree point locations, in the same CRS as the CHM.
+        raster (rio.DatasetReader): An open rasterio dataset handle for either a CHM or orthomosaic.
+        tree_points (gpd.GeoDataFrame): Tree point locations, in the same CRS as the raster.
         plot_bounds (gpd.GeoDataFrame, optional):
-            Boundary of the field plot to outline, in the same CRS as the CHM. Not shown if not
+            Boundary of the field plot to outline, in the same CRS as the raster. Not shown if not
             provided. If provided, the view is also cropped to its extent. Defaults to None.
         height_column (str, optional): Column in `tree_points` used to scale point size, so taller
             trees are shown as larger points. Defaults to "height".
@@ -31,18 +32,29 @@ def plot_trees_on_CHM(
         title (str, optional): Title for the plot. Defaults to None.
         ax (plt.Axes, optional): Axes to plot on. If not provided, a new figure and axes are
             created. Defaults to None.
+        add_colorbar (bool):
+            Whether to add a colorbar to the plot. Defaults to True.
 
     Returns:
         plt.Axes: The axes the data was plotted on.
     """
+    is_CHM = raster.count == 1
+
+    if is_CHM:
+        label = "CHM height (m)"
+    else:
+        label = None
+
     if ax is None:
         _, ax = plt.subplots()
     f = ax.get_figure()
 
-    # Show the CHM
-    ret = show(CHM, ax=ax, adjust=False)
-    im = ret.get_images()[0]
-    f.colorbar(im, ax=ax, label="CHM height (m)")
+    # Show the raster
+    ret = show(raster, ax=ax, adjust=False)
+
+    if is_CHM and add_colorbar:
+        im = ret.get_images()[0]
+        f.colorbar(im, ax=ax, label=label)
 
     # Show the plot bounds, if provided
     if plot_bounds is not None:
