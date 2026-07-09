@@ -1,3 +1,4 @@
+from pathlib import Path
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import rasterio as rio
@@ -5,7 +6,7 @@ from rasterio.plot import show
 
 
 def plot_trees_on_raster(
-    raster: rio.DatasetReader,
+    raster: rio.DatasetReader | Path | str,
     tree_points: gpd.GeoDataFrame,
     plot_bounds: gpd.GeoDataFrame = None,
     height_column: str = "height",
@@ -18,11 +19,13 @@ def plot_trees_on_raster(
     """Visualize tree points overlaid on a CHM or orthomosaic raster.
 
     Args:
-        raster (rio.DatasetReader): An open rasterio dataset handle for either a CHM or orthomosaic.
-        tree_points (gpd.GeoDataFrame): Tree point locations, in the same CRS as the raster.
+        raster (rio.DatasetReader, Path, str):
+            An open rasterio dataset handle or path to a file for either a CHM or orthomosaic.
+        tree_points (gpd.GeoDataFrame, Path, str):
+            Tree point locations or a path to them.
         plot_bounds (gpd.GeoDataFrame, optional):
-            Boundary of the field plot to outline, in the same CRS as the raster. Not shown if not
-            provided. If provided, the view is also cropped to its extent. Defaults to None.
+            Boundary of the field plot to outline. If provided, the view is also cropped to its
+            extent. Defaults to None.
         height_column (str, optional): Column in `tree_points` used to scale point size, so taller
             trees are shown as larger points. Defaults to "height".
         height_plotting_scale (float, optional):
@@ -38,6 +41,9 @@ def plot_trees_on_raster(
     Returns:
         plt.Axes: The axes the data was plotted on.
     """
+    if not isinstance(raster, rio.DatasetReader):
+        raster = rio.open(raster)
+
     is_CHM = raster.count == 1
 
     if is_CHM:
@@ -58,6 +64,7 @@ def plot_trees_on_raster(
 
     # Show the plot bounds, if provided
     if plot_bounds is not None:
+        plot_bounds.to_crs(raster.CRS, inplace=True)
         plot_bounds.plot(
             ax=ax, facecolor="none", edgecolor="cyan", linewidth=3, label="Plot bounds"
         )
@@ -67,6 +74,7 @@ def plot_trees_on_raster(
         ax.set_ylim(miny, maxy)
 
     # Show the tree points, sized by height
+    tree_points.to_crs(raster.CRS, inplace=True)
     tree_points.plot(
         ax=ax,
         markersize=tree_points[height_column] * height_plotting_scale,
