@@ -19,6 +19,18 @@ def match_trees_singlestratum(
 ):
     # A reimplementation of
     # https://github.com/open-forest-observatory/ofo-r/blob/3e3d138ffd99539affb7158979d06fc535bc1066/R/tree-detection-accuracy-assessment.R#L164
+
+    # Drop rows with missing/empty geometry. `shapely.get_coordinates` silently omits these,
+    # which would otherwise desync the coordinate arrays from the height arrays below and break
+    # the broadcasting. Track the original row positions so the returned indices still refer to
+    # the field_trees/drone_trees passed in by the caller.
+    field_valid = ~(field_trees.geometry.isna() | field_trees.geometry.is_empty)
+    drone_valid = ~(drone_trees.geometry.isna() | drone_trees.geometry.is_empty)
+    field_original_positions = np.flatnonzero(field_valid.to_numpy())
+    drone_original_positions = np.flatnonzero(drone_valid.to_numpy())
+    field_trees = field_trees[field_valid]
+    drone_trees = drone_trees[drone_valid]
+
     # Compute the pairwise distance matrix (dense, I don't see a way around it)
     field_tree_points_np = shapely.get_coordinates(field_trees.geometry)
     drone_tree_points_np = shapely.get_coordinates(drone_trees.geometry)
@@ -116,6 +128,12 @@ def match_trees_singlestratum(
 
         ax.legend()
         plt.show()
+
+    # Remap from positions within the filtered field_trees/drone_trees back to positions in the
+    # original frames passed in by the caller.
+    matched_field_tree_inds = list(field_original_positions[matched_field_tree_inds])
+    matched_drone_tree_inds = list(drone_original_positions[matched_drone_tree_inds])
+
     return matched_field_tree_inds, matched_drone_tree_inds
 
 
