@@ -54,6 +54,9 @@ def match_trees_singlestratum(
     below_max_height = drone_height < max_drone_height
     below_max_matching_dist = distance_matrix < max_dist
 
+    print(above_min_height.shape)
+    print(below_max_height.shape)
+    print(below_max_matching_dist.shape)
     # Compute which matches fit all three criteria
     possible_pairings = np.logical_and.reduce(
         [above_min_height, below_max_height, below_max_matching_dist]
