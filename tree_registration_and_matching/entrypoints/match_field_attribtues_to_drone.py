@@ -1,84 +1,50 @@
-from pathlib import Path
 import argparse
+from pathlib import Path
 
 import geopandas as gpd
-import pandas as pd
+
 from tree_registration_and_matching.add_attributes import match_field_and_drone_trees
 from tree_registration_and_matching.utils import ensure_height_is_present, is_overstory
 
-# Input variables
-pair_name = "{{inputs.parameters.drone-ground-pair-name}}"
-ground_plot_id = "{{inputs.parameters.ground-plot-id}}"
-field_trees_file = "{{inputs.parameters.field-trees-file}}"
-field_bounds_file = "{{inputs.parameters.field-bounds-file}}"
-drone_trees_file = "{{inputs.parameters.drone-trees-file}}"
-drone_crowns_file = "{{inputs.parameters.drone-crowns-file}}"
-registration_file = "{{inputs.parameters.registration-file}}"
-registration_quality_threshold = float(
-    "{{inputs.parameters.registration-quality-threshold}}"
-)
-
-output_file = Path("{{inputs.parameters.output-file}}")
-# Read all the products
-field_trees = gpd.read_file(field_trees_file)
-field_bounds = gpd.read_file(field_bounds_file)
-
-drone_trees = gpd.read_file(drone_trees_file)
-drone_crowns = gpd.read_file(drone_crowns_file)
-
-# Subset to the specified plot
-field_trees = field_trees.query("plot_id==@ground_plot_id")
-field_bounds = field_bounds.query("plot_id==@ground_plot_id")
-
-registration = pd.read_csv(registration_file)
-
-# See if it passes the quality threshold
-ratio_quality_metric = registration["ratio_quality_metric"].iloc[0]
-if ratio_quality_metric < registration_quality_threshold:
-    raise ValueError(
-        f"The quality metric ({ratio_quality_metric}) is less than the threshold ({registration_quality_threshold})"
-    )
-
-# Determine the shift that the CRS needs to be interpreted in
-working_CRS = registration["shift_CRS"].iloc[0]
-drone_crown_crs = drone_crowns.crs
-
-# Apply the shift
-x_shift = registration["estimated_shift_x"].iloc[0]
-y_shift = registration["estimated_shift_y"].iloc[0]
-
-field_trees.to_crs(working_CRS, inplace=True)
-field_bounds.to_crs(working_CRS, inplace=True)
-
-field_trees.geometry = field_trees.geometry.translate(xoff=x_shift, yoff=y_shift)
-field_bounds.geometry = field_bounds.geometry.translate(xoff=x_shift, yoff=y_shift)
+DEFAULT_KEEP_ONLY_MATCHED_CROWNS = True
+DEFAULT_MIN_FIELD_HEIGHT = 10.0
+DEFAULT_MIN_MATCHED_TREES = 10
+DEFAULT_MAX_DECAY_CLASS = 2
 
 
 def match_field_attributes_to_drone(
-    field_trees: gpd.GeoDataFrame,
-    drone_trees: gpd.GeoDataFrame,
-    drone_crowns: gpd.GeoDataFrame,
-    field_bounds: gpd.GeoDataFrame,
-    keep_only_matched_crowns: bool = True,
-    min_field_height: float = 10.0,
-    min_matched_trees: int = 10,
-    max_decay_class: int = 2,
+    field_trees_file: Path | str,
+    drone_trees_file: Path | str,
+    drone_crowns_file: Path | str,
+    field_bounds_file: Path | str,
+    output_file: Path | str,
+    keep_only_matched_crowns: bool = DEFAULT_KEEP_ONLY_MATCHED_CROWNS,
+    min_field_height: float = DEFAULT_MIN_FIELD_HEIGHT,
+    min_matched_trees: int = DEFAULT_MIN_MATCHED_TREES,
+    max_decay_class: int = DEFAULT_MAX_DECAY_CLASS,
 ):
     """Apply pre- and post-matching business logic which is specific to attributes in the OFO catalog
 
     Args:
-        field_trees (gpd.GeoDataFrame): The field surveyed trees, represented as points
-        drone_trees (gpd.GeoDataFrame): The drone detected tree tops, represented as points
-        drone_crowns (gpd.GeoDataFrame): The drone detected tree crowns, represented as polygons. These are linked to the tree tops by the tree_top_unique_ID which corresponds to the tree top unique ID field
-        field_bounds (gpd.GeoDataFrame): The extent of what was surveyed in the field survey. Defaults to gpd.GeoDataFrame.
+        field_trees (Path | str): Path to the field surveyed trees, represented as points
+        drone_trees (Path | str): Path to the drone detected tree tops, represented as points
+        drone_crowns (Path | str): Path to the drone detected tree crowns, represented as polygons. These are linked to the tree tops by the tree_top_unique_ID which corresponds to the tree top unique ID field
+        field_bounds (Path | str): Path to the extent of what was surveyed in the field survey.
+        output_file (Path | str): Path to write the drone crowns with additional field attributes to.
         keep_only_matched_crowns (bool, optional): Should crowns which do not match a field tree be dropped. Defaults to True.
         min_field_height (float, optional): The minimum height of trees to be considered. Defaults to 10.0.
         min_matched_trees (int, optional): The minimum number of trees that must be matched to write anything out. Defaults to 10.
-        max_decay_class (int, optional): The maximum decay class of trees to be retained. Defaults to 3.
+        max_decay_class (int, optional): The maximum decay class of trees to be retained. Defaults to 2.
 
     Raises:
         ValueError: If not enough trees are matched
     """
+    # Read the files
+    field_trees = gpd.read_file(field_trees_file)
+    drone_trees = gpd.read_file(drone_trees_file)
+    drone_crowns = gpd.read_file(drone_crowns_file)
+    field_bounds = gpd.read_file(field_bounds_file)
+
     print(f"A total of {len(field_trees)} were present")
     # The decay class specifies how severely a dead trees is decaying. At values above decay class 2,
     # it is expected that the stem may be broken. This would cause issues estimating the height from
@@ -127,6 +93,7 @@ def match_field_attributes_to_drone(
     print(f"Matched {final_n_matched} trees")
     if final_n_matched >= min_matched_trees:
         # Save the drone crowns with additional field attributes to the file
+        output_file = Path(output_file)
         output_file.parent.mkdir(exist_ok=True, parents=True)
         drone_crowns_with_additional_attributes.to_file(output_file)
     else:
@@ -134,4 +101,61 @@ def match_field_attributes_to_drone(
 
 
 def parse_args():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Apply pre- and post-matching business logic which is specific to attributes in the OFO catalog"
+    )
+    parser.add_argument(
+        "field_trees_file",
+        type=Path,
+        help="Path to the field surveyed trees, represented as points",
+    )
+    parser.add_argument(
+        "drone_trees_file",
+        type=Path,
+        help="Path to the drone detected tree tops, represented as points",
+    )
+    parser.add_argument(
+        "drone_crowns_file",
+        type=Path,
+        help="Path to the drone detected tree crowns, represented as polygons. These are linked to the tree tops by the tree_top_unique_ID",
+    )
+    parser.add_argument(
+        "field_bounds_file",
+        type=Path,
+        help="Path to the extent of what was surveyed in the field survey",
+    )
+    parser.add_argument(
+        "output_file",
+        type=Path,
+        help="Path to write the drone crowns with additional field attributes to",
+    )
+    parser.add_argument(
+        "--keep-only-matched-crowns",
+        action=argparse.BooleanOptionalAction,
+        default=DEFAULT_KEEP_ONLY_MATCHED_CROWNS,
+        help="Drop crowns which do not match a field tree (use --no-keep-only-matched-crowns to retain them)",
+    )
+    parser.add_argument(
+        "--min-field-height",
+        type=float,
+        default=DEFAULT_MIN_FIELD_HEIGHT,
+        help=f"The minimum height of trees to be considered. Defaults to {DEFAULT_MIN_FIELD_HEIGHT}.",
+    )
+    parser.add_argument(
+        "--min-matched-trees",
+        type=int,
+        default=DEFAULT_MIN_MATCHED_TREES,
+        help=f"The minimum number of trees that must be matched to write anything out. Defaults to {DEFAULT_MIN_MATCHED_TREES}.",
+    )
+    parser.add_argument(
+        "--max-decay-class",
+        type=int,
+        default=DEFAULT_MAX_DECAY_CLASS,
+        help=f"The maximum decay class of trees to be retained. Defaults to {DEFAULT_MAX_DECAY_CLASS}.",
+    )
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    match_field_attributes_to_drone(**vars(args))
