@@ -1,4 +1,5 @@
 import argparse
+import logging
 from pathlib import Path
 
 import geopandas as gpd
@@ -26,13 +27,13 @@ def match_field_attributes_to_drone(
     """Apply pre- and post-matching business logic which is specific to attributes in the OFO catalog
 
     Args:
-        field_trees (Path | str): Path to the field surveyed trees, represented as points
+        field_trees (Path | str): Path to the field surveyed trees, represented as points. These data should have the following attributes: decay_class, live_dead, height, height_allometric, and dbh.
         drone_trees (Path | str): Path to the drone detected tree tops, represented as points
         drone_crowns (Path | str): Path to the drone detected tree crowns, represented as polygons. These are linked to the tree tops by the tree_top_unique_ID which corresponds to the tree top unique ID field
         field_bounds (Path | str): Path to the extent of what was surveyed in the field survey.
         output_file (Path | str): Path to write the drone crowns with additional field attributes to.
         keep_only_matched_crowns (bool, optional): Should crowns which do not match a field tree be dropped. Defaults to True.
-        min_field_height (float, optional): The minimum height of trees to be considered. Defaults to 10.0.
+        min_field_height (float, optional): The minimum height of trees to be retained after matching. Defaults to 10.0.
         min_matched_trees (int, optional): The minimum number of trees that must be matched to write anything out. Defaults to 10.
         max_decay_class (int, optional): The maximum decay class of trees to be retained. Defaults to 2.
 
@@ -45,22 +46,23 @@ def match_field_attributes_to_drone(
     drone_crowns = gpd.read_file(drone_crowns_file)
     field_bounds = gpd.read_file(field_bounds_file)
 
-    print(f"A total of {len(field_trees)} were present")
+    logging.info(f"A total of {len(field_trees)} were present")
     # The decay class specifies how severely a dead trees is decaying. At values above decay class 2,
     # it is expected that the stem may be broken. This would cause issues estimating the height from
     # DBH, and likely suggests a tree that will overall not be reconstructed well. Therefore, these
     # trees are dropped prior to matching.
     decay_mask = field_trees.decay_class > max_decay_class
-    print(f"Removing {decay_mask.sum()} trees due to decay")
+    logging.info(f"Removing {decay_mask.sum()} trees due to decay")
     field_trees = field_trees[~decay_mask]
-    # Impute height for as many trees as possible, using other attributes
+    # Impute height for as many trees as possible, using other attributes. Any trees for which it is
+    # impossible to match height are dropped.
     field_trees = ensure_height_is_present(field_trees)
     # Remove understory trees
     overstory_mask = is_overstory(field_trees)
-    print(f"Removing {(~overstory_mask).sum()} trees due to being understory")
+    logging.info(f"Removing {(~overstory_mask).sum()} trees due to being understory")
     field_trees = field_trees[overstory_mask]
 
-    print(f"Matching {len(field_trees)} field trees to {len(drone_trees)} drone trees")
+    logging.info(f"Matching {len(field_trees)} field trees to {len(drone_trees)} drone trees")
     # Perform matching
     drone_crowns_with_additional_attributes = match_field_and_drone_trees(
         field_trees=field_trees,
@@ -69,27 +71,20 @@ def match_field_attributes_to_drone(
         field_perim=field_bounds,
         keep_only_matched_crowns=keep_only_matched_crowns,
     )
+    logging.info(f"Matched {len(drone_crowns_with_additional_attributes)} trees")
 
-    # Convert back to the original drone CRS
-    print(f"Matched {len(drone_crowns_with_additional_attributes)} trees")
-
-    # Drop crowns matched to field trees with no species code
-    drone_crowns_with_additional_attributes = (
-        drone_crowns_with_additional_attributes.dropna(subset=["species_code"])
-    )
     # Drop any dead trees. Note that there may be classes other than "L" (live) in the output
     # but these are assumed to be live as well.
     drone_crowns_with_additional_attributes = drone_crowns_with_additional_attributes[
         drone_crowns_with_additional_attributes.live_dead != "D"
     ]
-    # Drop any crowns that were less than 10m tall
+    # Drop any crowns that were less than min_field_height tall
     drone_crowns_with_additional_attributes = drone_crowns_with_additional_attributes[
         drone_crowns_with_additional_attributes.height_field > min_field_height
     ]
     final_n_matched = len(drone_crowns_with_additional_attributes)
-    print(f"After filtering all matched trees, {final_n_matched} trees remain")
+    logging.info(f"After filtering all matched trees, {final_n_matched} trees remain")
 
-    print(f"Matched {final_n_matched} trees")
     if final_n_matched >= min_matched_trees:
         # Save the drone crowns with additional field attributes to the file
         output_file = Path(output_file)
@@ -156,5 +151,6 @@ def parse_args():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     args = parse_args()
     match_field_attributes_to_drone(**vars(args))
