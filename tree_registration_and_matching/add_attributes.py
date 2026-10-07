@@ -29,6 +29,8 @@ def match_field_and_drone_trees(
     Returns:
         gpd.GeoDataFrame: Drone crowns with additional attributes from the field survey
     """
+    original_drone_CRS = drone_crowns.crs
+
     # Ensure they are all in the same projected CRS
     field_trees = ensure_projected_CRS(field_trees)
     drone_trees = drone_trees.to_crs(field_trees.crs)
@@ -79,4 +81,4 @@ def match_field_and_drone_trees(
         ),  # Append these suffixes in cases of name collisions
     )
 
-    return drone_crowns_with_additional_attributes
+    return drone_crowns_with_additional_attributes.to_crs(original_drone_CRS)

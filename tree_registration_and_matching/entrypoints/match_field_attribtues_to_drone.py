@@ -71,7 +71,6 @@ def match_field_attributes_to_drone(
     )
 
     # Convert back to the original drone CRS
-    drone_crowns_with_additional_attributes.to_crs(drone_crown_crs, inplace=True)
     print(f"Matched {len(drone_crowns_with_additional_attributes)} trees")
 
     # Drop crowns matched to field trees with no species code
