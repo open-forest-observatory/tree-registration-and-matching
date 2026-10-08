@@ -12,6 +12,8 @@ poetry install
 ```
 
 ## Example data
+
+### Benchmark
 An example benchmark is provided to test registration algorithms and can be downloaded from Box at this [link](https://ucdavis.box.com/v/ofo-tree-registration). This dataset consists of data from 232 drone imagery collections and corresponding field reference information. The field reference information was manually registered to the CHM product for each dataset. The data should be downloaded and placed inside of the `data` folder in this repository (`tree-registration-and-matching/data/ofo-tree-registration`). You can download a subset of the CHM products to save space and time if desired; all other files are small.
 * **CHMs:** The drone images were registered together using photogrammetry (Agisoft Metashape). This produces a digital surface model (DSM; top of canopy) and digital terrain model (DTM; bare earth model) for each site. Taking the differece of the two we obtain a raster representing the estimated canopy height model (CHM). This is cropped to a buffer of 50 meters around the region which was surveyed. The data is provided as a geotiff file (`.tif`) which encodes the spatial location of the data.
 * **detected-trees.gpkg:** This is a geospatial vector file containing the point locations of individual detected trees. These were identified from the CHM using a variable radius maximum filter, implemented in the [Tree Detection Framework](https://github.com/open-forest-observatory/tree-detection-framework/blob/35c8020f86a6f51c582962298ee37ab9acdcfd21/tree_detection_framework/detection/detector.py#L478).
@@ -21,6 +23,10 @@ Finally, height is imputed for all trees that do not have a field-measured value
 * **shift_quality.json:** This is a mapping from `dataset_id` to a number from 1-4. The latter is a quality score, with 4 being the highest. This takes into account how accurate the field survey appeared to be when compared to the CHM data. Furthermore, it also represents how confident a human annotator was in finding the correct shift for that dataset.
 * **shfts_per_dataset.json:** All of the field trees and plot bounds have been shifted so that they align as well as possible with the CHM, as determined by a human annotator. This shift, represented as an (x, y) shift in meters in the `EPSG:26910` coordinate frame, represents how much the data needed to be shifted by. Since the provided trees and plot bounds are already shifted, you must apply the negative of this value to get the initial location of the trees and plots.
 
-### Running real-world examples
+### Tree matching
+A single plot worth of data is provided [here](https://ucdavis.box.com/v/TRAM-matching-example) for testing tree field-to-drone tree matching. It should be treated as an illustrative example with no specific ground truth outcome. This data should be also be downloaded and placed inside the `data` folder. At this time, the main use for this data is the `tree_registration_and_matching/entrypoints/match_field_attributes_to_drone.py` script.
+
+
+## Running real-world examples
 Using the data described here, you can run both the `examples/example_registratiration_real_data_CHM.ipynb` and `examples/example_registration_real_data_MEE.ipynb` notebooks. The first one is a canopy height model (CHM) approach which computes the correlation between the field-measured heights and the corresponding location on the CHM. The latter uses trees detected from the CHM and tries to match these to the observed trees.
 
