@@ -19,7 +19,7 @@ def match_trees_singlestratum(
     field_bounds_for_vis: Optional[gpd.GeoDataFrame] = None,
     height_col="height",
     vis=False,
-    vis_file : Path=None,
+    vis_file: Path = None,
     points_scale_factor: float = 0.4,
 ):
     # A reimplementation of
@@ -110,7 +110,9 @@ def match_trees_singlestratum(
         )
 
         if field_bounds_for_vis is not None:
-            field_bounds_for_vis.boundary.plot(ax=ax, color="0.5", label="Survey bounds")
+            field_bounds_for_vis.boundary.plot(
+                ax=ax, color="0.5", label="Survey bounds"
+            )
 
         ordered_matched_field_trees = field_tree_points_np[matched_field_tree_inds]
         ordered_matched_drone_trees = drone_tree_points_np[matched_drone_tree_inds]
