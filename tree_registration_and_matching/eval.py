@@ -3,6 +3,9 @@ import matplotlib.collections as mc
 import matplotlib.pyplot as plt
 import numpy as np
 import shapely
+from pathlib import Path
+
+from typing import Optional
 
 from tree_registration_and_matching.utils import cdist
 
@@ -13,8 +16,10 @@ def match_trees_singlestratum(
     search_height_proportion=0.2,
     search_distance_fun_slope=0.1,
     search_distance_fun_intercept=1,
+    field_bounds_for_vis: Optional[gpd.GeoDataFrame] = None,
     height_col="height",
     vis=False,
+    vis_file : Path=None,
     points_scale_factor: float = 0.4,
 ):
     # A reimplementation of
@@ -86,9 +91,9 @@ def match_trees_singlestratum(
         if len(matched_field_tree_inds) == max_valid_matches:
             break
 
-    if vis:
+    if vis or (vis_file is not None):
         # Visualize matches
-        f, ax = plt.subplots()
+        _, ax = plt.subplots()
         ax.scatter(
             x=field_tree_points_np[:, 0],
             y=field_tree_points_np[:, 1],
@@ -104,6 +109,9 @@ def match_trees_singlestratum(
             label="drone trees",
         )
 
+        if field_bounds_for_vis is not None:
+            field_bounds_for_vis.boundary.plot(ax=ax, color="0.5", label="Survey bounds")
+
         ordered_matched_field_trees = field_tree_points_np[matched_field_tree_inds]
         ordered_matched_drone_trees = drone_tree_points_np[matched_drone_tree_inds]
         lines = [
@@ -114,8 +122,18 @@ def match_trees_singlestratum(
         lc = mc.LineCollection(lines, colors="k", linewidths=2, label="matches")
         ax.add_collection(lc)
 
+        ax.set_aspect("equal")
         ax.legend()
-        plt.show()
+
+        if vis:
+            plt.show()
+
+        if vis_file is not None:
+            vis_file.parent.mkdir(parents=True, exist_ok=True)
+
+            plt.tight_layout()
+            plt.savefig(vis_file)
+
     return matched_field_tree_inds, matched_drone_tree_inds
 
 
@@ -128,6 +146,7 @@ def obj_mee_matching(
     height_column: str = "height",
     return_all_metrics: bool = False,
     vis: bool = False,
+    vis_file: Path = None,
 ) -> float:
     """
     Compute the F1 score for how many trees matched.
@@ -143,6 +162,7 @@ def obj_mee_matching(
         height_column (str, optional): What column represents the tree heights. Defaults to "height".
         return_all_metrics (bool, optional): Return a dictionary of metrics as the second return.
         vis (bool, optional): Should the matching be shown. Defaults to False.
+        vis_file (Path, optional): Save the match visualizations to this file. Defaults to None.
 
     Returns:
         float: The F1 score for matching
@@ -161,7 +181,9 @@ def obj_mee_matching(
     matched_field_tree_inds, matched_drone_tree_inds = match_trees_singlestratum(
         field_trees=shifted_field_trees_cropped,
         drone_trees=drone_trees_cropped,
+        field_bounds_for_vis=obs_bounds,
         vis=vis,
+        vis_file=vis_file,
     )
 
     # From the tree inds, we get the number of matches. Now all that's left to do is compute which
