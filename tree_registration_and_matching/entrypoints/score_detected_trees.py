@@ -47,11 +47,11 @@ def shift_field_products(
 
     estimated_shift_x = shift.estimated_shift_x.iloc[0]
     estimated_shift_y = shift.estimated_shift_y.iloc[0]
-    shift_crs = shift.shift_crs.iloc[0]
+    shift_crs = shift.shift_CRS.iloc[0]
 
     # Ensure that the products are in the CRS the shift was computed relative to
-    field_trees = field_trees.to_crs(shift_crs, inplace=True)
-    field_plot_bounds = field_plot_bounds.to_crs(shift_crs, inplace=True)
+    field_trees = field_trees.to_crs(shift_crs)
+    field_plot_bounds = field_plot_bounds.to_crs(shift_crs)
 
     # Perform the translation
     field_trees.geometry = field_trees.translate(
