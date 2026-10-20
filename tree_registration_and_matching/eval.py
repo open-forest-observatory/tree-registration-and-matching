@@ -1,11 +1,11 @@
+from pathlib import Path
+from typing import Optional
+
 import geopandas as gpd
 import matplotlib.collections as mc
 import matplotlib.pyplot as plt
 import numpy as np
 import shapely
-from pathlib import Path
-
-from typing import Optional
 
 from tree_registration_and_matching.utils import cdist
 
