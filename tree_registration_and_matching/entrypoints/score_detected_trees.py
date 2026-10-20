@@ -65,7 +65,7 @@ def shift_field_products(
     return field_trees.to_crs(initial_crs), field_plot_bounds.to_crs(initial_crs)
 
 
-def score_tree_detection(
+def score_detected_trees(
     field_trees_file: Path | str,
     drone_trees_file: Path | str,
     field_plot_bounds_file: Path | str,
@@ -199,4 +199,4 @@ def parse_args():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     args = parse_args()
-    score_tree_detection(**vars(args))
+    score_detected_trees(**vars(args))
