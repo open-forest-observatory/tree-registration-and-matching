@@ -98,20 +98,20 @@ def match_trees_singlestratum(
             x=field_tree_points_np[:, 0],
             y=field_tree_points_np[:, 1],
             s=field_trees[height_col] * points_scale_factor,
-            c="r",
-            label="field trees",
+            c="#57d9d0",
+            label="ground reference trees",
         )
         ax.scatter(
             x=drone_tree_points_np[:, 0],
             y=drone_tree_points_np[:, 1],
             s=drone_trees[height_col] * points_scale_factor,
-            c="b",
+            c="#b7484b",
             label="drone trees",
         )
 
         if field_bounds_for_vis is not None:
             field_bounds_for_vis.boundary.plot(
-                ax=ax, color="0.5", label="Survey bounds"
+                ax=ax, color="0.5", label="Plot bounds"
             )
 
         ordered_matched_field_trees = field_tree_points_np[matched_field_tree_inds]
@@ -149,6 +149,7 @@ def obj_mee_matching(
     return_all_metrics: bool = False,
     vis: bool = False,
     vis_file: Path = None,
+    matches_file: Path = None,
 ) -> float:
     """
     Compute the F1 score for how many trees matched.
@@ -165,6 +166,7 @@ def obj_mee_matching(
         return_all_metrics (bool, optional): Return a dictionary of metrics as the second return.
         vis (bool, optional): Should the matching be shown. Defaults to False.
         vis_file (Path, optional): Save the match visualizations to this file. Defaults to None.
+        matches_file (Path, optional): Save a geofile of lines representing matches between field and drone trees. Defaults to None.
 
     Returns:
         float: The F1 score for matching
@@ -187,6 +189,23 @@ def obj_mee_matching(
         vis=vis,
         vis_file=vis_file,
     )
+
+    # Save out file of matches, represented as lines connecting the two trees
+    if matches_file is not None:
+        matched_field_trees = shifted_field_trees_cropped.iloc[matched_field_tree_inds]
+        matched_drone_trees = drone_trees_cropped.iloc[matched_drone_tree_inds]
+        # One line per match, from the field tree (first) to the drone tree (second)
+        match_lines = [
+            shapely.LineString([field_pt, drone_pt])
+            for field_pt, drone_pt in zip(
+                matched_field_trees.geometry, matched_drone_trees.geometry
+            )
+        ]
+        matches_gdf = gpd.GeoDataFrame(
+            geometry=match_lines, crs=shifted_field_trees_cropped.crs
+        )
+        matches_file.parent.mkdir(exist_ok=True, parents=True)
+        matches_gdf.to_file(matches_file)
 
     # From the tree inds, we get the number of matches. Now all that's left to do is compute which
     # fraction of those fall within the core area and how many remain
