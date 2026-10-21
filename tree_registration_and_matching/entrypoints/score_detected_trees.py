@@ -76,6 +76,7 @@ def score_detected_trees(
     height_column: str = DEFAULT_HEIGHT_COLUMN,
     vis: bool = False,
     vis_file: Path = None,
+    matches_file: Path = None,
 ) -> dict:
     """Compute the F1 score for how many field trees were matched by drone-detected trees.
     Adapted from: https://github.com/open-forest-observatory/ofo-r/blob/3e3d138ffd99539affb7158979d06fc535bc1066/R/tree-map-alignment.R#L138
@@ -90,6 +91,7 @@ def score_detected_trees(
         height_column (str, optional): What column represents the tree heights. Defaults to "height".
         vis (bool, optional): Should the matching be shown. Defaults to False.
         vis_file (Path, optional): Save the match visualizations to this file. Defaults to None.
+        matches_file (Path, optional): Save out a geofile of lines representing the matches between field and drone trees. Defaults to None.
 
     Returns:
         dict: F1, precision, recall, and counts for drone/field core/matched trees
@@ -128,6 +130,7 @@ def score_detected_trees(
         return_all_metrics=True,
         vis=vis,
         vis_file=vis_file,
+        matches_file=matches_file,
     )
     logging.info(f"Metrics: {metrics}")
 
@@ -200,6 +203,11 @@ def parse_args():
         "--vis-file",
         type=Path,
         help="Save the matching visualization to this file if provided.",
+    )
+    parser.add_argument(
+        "--matches-file",
+        type=Path,
+        help="Save out a geofile of lines representing the matches between field and drone trees.",
     )
 
     return parser.parse_args()
