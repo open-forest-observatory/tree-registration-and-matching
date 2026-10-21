@@ -109,11 +109,6 @@ def match_trees_singlestratum(
             label="drone trees",
         )
 
-        if field_bounds_for_vis is not None:
-            field_bounds_for_vis.boundary.plot(
-                ax=ax, color="0.5", label="Plot bounds"
-            )
-
         ordered_matched_field_trees = field_tree_points_np[matched_field_tree_inds]
         ordered_matched_drone_trees = drone_tree_points_np[matched_drone_tree_inds]
         lines = [
@@ -121,8 +116,13 @@ def match_trees_singlestratum(
             for x, y in zip(ordered_matched_field_trees, ordered_matched_drone_trees)
         ]
 
-        lc = mc.LineCollection(lines, colors="k", linewidths=2, label="matches")
+        lc = mc.LineCollection(lines, colors="#e35eac", linewidths=2, label="matches")
         ax.add_collection(lc)
+
+        if field_bounds_for_vis is not None:
+            field_bounds_for_vis.boundary.plot(
+                ax=ax, color="0.5", label="Plot bounds"
+            )
 
         ax.set_aspect("equal")
         ax.legend()
