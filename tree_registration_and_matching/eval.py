@@ -120,9 +120,7 @@ def match_trees_singlestratum(
         ax.add_collection(lc)
 
         if field_bounds_for_vis is not None:
-            field_bounds_for_vis.boundary.plot(
-                ax=ax, color="0.5", label="Plot bounds"
-            )
+            field_bounds_for_vis.boundary.plot(ax=ax, color="0.5", label="Plot bounds")
 
         ax.set_aspect("equal")
         ax.legend()
