@@ -1,9 +1,7 @@
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Tuple
 
 import geopandas as gpd
-import matplotlib.collections as mc
-import matplotlib.pyplot as plt
 import numpy as np
 import shapely
 
