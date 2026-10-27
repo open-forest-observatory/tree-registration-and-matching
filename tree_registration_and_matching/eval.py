@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import geopandas as gpd
 import matplotlib.collections as mc
@@ -11,17 +11,35 @@ from tree_registration_and_matching.utils import cdist
 
 
 def match_trees_singlestratum(
-    field_trees,
-    drone_trees,
-    search_height_proportion=0.2,
-    search_distance_fun_slope=0.1,
-    search_distance_fun_intercept=1,
+    field_trees: gpd.GeoDataFrame,
+    drone_trees: gpd.GeoDataFrame,
+    search_height_proportion: float = 0.2,
+    search_distance_fun_slope: float = 0.1,
+    search_distance_fun_intercept: float = 1,
     field_bounds_for_vis: Optional[gpd.GeoDataFrame] = None,
-    height_col="height",
-    vis=False,
+    height_col: str = "height",
+    vis: bool = False,
     vis_file: Path = None,
     points_scale_factor: float = 0.4,
-):
+) -> Tuple[np.ndarray, np.ndarray]:
+    """_summary_
+
+    Args:
+        field_trees (gpd.GeoDataFrame): _description_
+        drone_trees (gpd.GeoDataFrame): _description_
+        search_height_proportion (float, optional): _description_. Defaults to 0.2.
+        search_distance_fun_slope (float, optional): _description_. Defaults to 0.1.
+        search_distance_fun_intercept (float, optional): _description_. Defaults to 1.
+        field_bounds_for_vis (Optional[gpd.GeoDataFrame], optional): _description_. Defaults to None.
+        height_col (str, optional): _description_. Defaults to "height".
+        vis (bool, optional): _description_. Defaults to False.
+        vis_file (Path, optional): _description_. Defaults to None.
+        points_scale_factor (float, optional): _description_. Defaults to 0.4.
+
+    Returns:
+        np.ndarray: indices (index column) of the matched field trees
+        np.ndarray: indices (index column) of the matched drone trees
+    """
     # A reimplementation of
     # https://github.com/open-forest-observatory/ofo-r/blob/3e3d138ffd99539affb7158979d06fc535bc1066/R/tree-detection-accuracy-assessment.R#L164
     # Compute the pairwise distance matrix (dense, I don't see a way around it)
@@ -134,7 +152,14 @@ def match_trees_singlestratum(
             plt.tight_layout()
             plt.savefig(vis_file)
 
-    return matched_field_tree_inds, matched_drone_tree_inds
+    # Extract the index values rather than row indices
+    matched_field_tree_original_indices = field_trees.index[
+        matched_field_tree_inds
+    ].values
+    matched_drone_tree_original_indices = drone_trees.index[
+        matched_drone_tree_inds
+    ].values
+    return matched_field_tree_original_indices, matched_drone_tree_original_indices
 
 
 def obj_mee_matching(
@@ -175,12 +200,9 @@ def obj_mee_matching(
         obs_bounds.geometry.values[0]
     )
     drone_trees_cropped = drone_trees.clip(obs_bounds.geometry.values[0])
-    # Reset the index to integers starting at 0
-    shifted_field_trees_cropped.reset_index(inplace=True, drop=True)
-    drone_trees_cropped.reset_index(inplace=True, drop=True)
 
     # Compute the matches between the shifted field points and the drone points
-    matched_field_tree_inds, matched_drone_tree_inds = match_trees_singlestratum(
+    matched_field_tree_indices, matched_drone_tree_indices = match_trees_singlestratum(
         field_trees=shifted_field_trees_cropped,
         drone_trees=drone_trees_cropped,
         field_bounds_for_vis=obs_bounds,
@@ -190,8 +212,8 @@ def obj_mee_matching(
 
     # Save out file of matches, represented as lines connecting the two trees
     if matches_file is not None:
-        matched_field_trees = shifted_field_trees_cropped.iloc[matched_field_tree_inds]
-        matched_drone_trees = drone_trees_cropped.iloc[matched_drone_tree_inds]
+        matched_field_trees = shifted_field_trees_cropped[matched_field_tree_indices]
+        matched_drone_trees = drone_trees_cropped[matched_drone_tree_indices]
         # One line per match, from the field tree (first) to the drone tree (second)
         match_lines = [
             shapely.LineString([field_pt, drone_pt])
@@ -218,10 +240,10 @@ def obj_mee_matching(
     core_drone_trees = core_drone_trees[core_drone_trees[height_column] >= min_height]
 
     # Find which of the core trees were matched based on their indices
-    field_core_matched = set(matched_field_tree_inds).intersection(
+    field_core_matched = set(matched_field_tree_indices).intersection(
         set(core_field_trees.index)
     )
-    drone_core_matched = set(matched_drone_tree_inds).intersection(
+    drone_core_matched = set(matched_drone_tree_indices).intersection(
         set(core_drone_trees.index)
     )
 
@@ -241,15 +263,22 @@ def obj_mee_matching(
         if (precision + recall) > 0
         else 0
     )
+
     if return_all_metrics:
-        return f1, {
-            "F1": f1,
-            "precision": precision,
-            "recall": recall,
-            "n_core_field": n_core_field,
-            "n_core_drone": n_core_drone,
-            "n_field_matched": n_field_matched,
-            "n_drone_matched": n_drone_matched,
-        }
+        # Extract the index column so the un-cropped trees can be matched
+        return (
+            f1,
+            {
+                "F1": f1,
+                "precision": precision,
+                "recall": recall,
+                "n_core_field": n_core_field,
+                "n_core_drone": n_core_drone,
+                "n_field_matched": n_field_matched,
+                "n_drone_matched": n_drone_matched,
+            },
+            matched_field_tree_indices,
+            matched_drone_tree_indices,
+        )
 
     return f1

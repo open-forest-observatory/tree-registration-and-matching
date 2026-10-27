@@ -120,7 +120,13 @@ def score_detected_trees(
         f"Scoring {len(drone_trees)} drone trees against {len(field_trees)} field trees"
     )
 
-    _, metrics = obj_mee_matching(
+    # TODO return the matching IDs
+    (
+        _,
+        metrics,
+        matched_field_tree_original_indices,
+        matched_drone_tree_original_indices,
+    ) = obj_mee_matching(
         shifted_field_trees=field_trees,
         drone_trees=drone_trees,
         obs_bounds=field_plot_bounds,
@@ -132,6 +138,9 @@ def score_detected_trees(
         vis_file=vis_file,
         matches_file=matches_file,
     )
+
+    # TODO save out the file of matches
+
     logging.info(f"Metrics: {metrics}")
 
     if output_file is not None:
