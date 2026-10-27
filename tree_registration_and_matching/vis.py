@@ -67,9 +67,11 @@ def plot_trees_on_raster(
     if plot_bounds is not None:
         plot_bounds.to_crs(raster.crs, inplace=True)
         minx, miny, maxx, maxy = plot_bounds.total_bounds
-        window = rio.windows.from_bounds(
+        window_plot_bounds = rio.windows.from_bounds(
             minx, miny, maxx, maxy, transform=raster.transform
-        ).intersection(rio.windows.Window(0, 0, raster.width, raster.height))
+        )
+        window_raster_extent = rio.windows.Window(0, 0, raster.width, raster.height)
+        window = window_plot_bounds.intersection(window_raster_extent)
         window_transform = raster.window_transform(window)
 
     # Show the raster, restricted to the plot-bounds window if one was computed
