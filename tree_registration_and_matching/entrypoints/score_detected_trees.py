@@ -87,6 +87,7 @@ def score_detected_trees(
     categorical_scoring_attribute: bool | None = None,
     scoring_metrics_savefile: Path | None = None,
     vis_attribute_scoring: bool = False,
+    vis_attribute_scoring_savefile: Path | None = None,
 ) -> dict:
     """Compute the F1 score for how many field trees were matched by drone-detected trees.
     Adapted from: https://github.com/open-forest-observatory/ofo-r/blob/3e3d138ffd99539affb7158979d06fc535bc1066/R/tree-map-alignment.R#L138
@@ -102,6 +103,12 @@ def score_detected_trees(
         vis (bool, optional): Should the matching be shown. Defaults to False.
         vis_file (Path, optional): Save the match visualizations to this file. Defaults to None.
         matches_file (Path, optional): Save out a geofile of lines representing the matches between field and drone trees. Defaults to None.
+        field_attribute_to_score (str, optional): The column in the field data to use as the prediction target. Defaults to None.
+        drone_attribute_to_score (str, optional): The column in the drone data to use as the prediction. Will be evaluated against the field_attribute_to_score column of the field data. Defaults to None.
+        categorical_scoring_attribute (bool | None, optional): Is the attribute categorical? Defaults to None.
+        scoring_metrics_savefile (Path | None, optional): Path to save the scoring metrics to in .json format. Defaults to None.
+        vis_attribute_scoring (bool, optional): Should the scoring results be visualized to the screen. Defaults to False.
+        vis_attribute_scoring_savefile (Path | None, optional): Path to save the prediction scoring visualization to. Defaults to None.
 
     Returns:
         dict:
@@ -193,6 +200,7 @@ def score_detected_trees(
             drone_trees_attribute=drone_attribute_to_score,
             categorical=categorical_scoring_attribute,
             vis=vis_attribute_scoring,
+            vis_savefile=vis_attribute_scoring_savefile,
         )
 
         logging.info(
@@ -274,7 +282,44 @@ def parse_args():
         type=Path,
         help="Save out a geofile of lines representing the matches between field and drone trees.",
     )
-
+    parser.add_argument(
+        "--field-attribute-to-score",
+        help="The column in the field data to use as the prediction target.",
+    )
+    parser.add_argument(
+        "--drone-attribute-to-score",
+        help="The column in the drone data to use as the prediction. Will be evaluated against the --field-attribute-to-score column of the field data.",
+    )
+    attribute_type_group = parser.add_mutually_exclusive_group()
+    attribute_type_group.add_argument(
+        "--categorical-scoring-attribute",
+        help="Is the attribute categorical?",
+        action="store_true",
+        dest="categorical_scoring_attribute",
+        default=None,
+    )
+    attribute_type_group.add_argument(
+        "--continuous-scoring-attribute",
+        help="Is the attribute continuous? Opposite of --categorical-scoring-attribute.",
+        action="store_false",
+        dest="categorical_scoring_attribute",
+        default=None,
+    )
+    parser.add_argument(
+        "--scoring-metrics-savefile",
+        type=Path,
+        help="Path to save the scoring metrics to in .json format.",
+    )
+    parser.add_argument(
+        "--vis-attribute-scoring",
+        action="store_true",
+        help="Should the scoring results be visualized to the screen.",
+    )
+    parser.add_argument(
+        "--vis-attribute-scoring-savefile",
+        type=Path,
+        help="Path to save the prediction scoring visualization to.",
+    )
     return parser.parse_args()
 
 
