@@ -16,11 +16,7 @@ def match_trees_singlestratum(
     search_height_proportion: float = 0.2,
     search_distance_fun_slope: float = 0.1,
     search_distance_fun_intercept: float = 1,
-    field_bounds_for_vis: Optional[gpd.GeoDataFrame] = None,
     height_col: str = "height",
-    vis: bool = False,
-    vis_file: Path = None,
-    points_scale_factor: float = 0.4,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """_summary_
 
@@ -109,49 +105,6 @@ def match_trees_singlestratum(
         if len(matched_field_tree_inds) == max_valid_matches:
             break
 
-    if vis or (vis_file is not None):
-        # Visualize matches
-        _, ax = plt.subplots()
-        ax.scatter(
-            x=field_tree_points_np[:, 0],
-            y=field_tree_points_np[:, 1],
-            s=field_trees[height_col] * points_scale_factor,
-            c="#57d9d0",
-            label="ground reference trees",
-        )
-        ax.scatter(
-            x=drone_tree_points_np[:, 0],
-            y=drone_tree_points_np[:, 1],
-            s=drone_trees[height_col] * points_scale_factor,
-            c="#b7484b",
-            label="drone trees",
-        )
-
-        ordered_matched_field_trees = field_tree_points_np[matched_field_tree_inds]
-        ordered_matched_drone_trees = drone_tree_points_np[matched_drone_tree_inds]
-        lines = [
-            [tuple(x), tuple(y)]
-            for x, y in zip(ordered_matched_field_trees, ordered_matched_drone_trees)
-        ]
-
-        lc = mc.LineCollection(lines, colors="#e35eac", linewidths=2, label="matches")
-        ax.add_collection(lc)
-
-        if field_bounds_for_vis is not None:
-            field_bounds_for_vis.boundary.plot(ax=ax, color="0.5", label="Plot bounds")
-
-        ax.set_aspect("equal")
-        ax.legend()
-
-        if vis:
-            plt.show()
-
-        if vis_file is not None:
-            vis_file.parent.mkdir(parents=True, exist_ok=True)
-
-            plt.tight_layout()
-            plt.savefig(vis_file)
-
     # Extract the index values rather than row indices
     matched_field_tree_original_indices = field_trees.index[
         matched_field_tree_inds
@@ -170,9 +123,6 @@ def obj_mee_matching(
     edge_buffer: float = 5,
     height_column: str = "height",
     return_all_metrics: bool = False,
-    vis: bool = False,
-    vis_file: Path = None,
-    matches_file: Path = None,
 ) -> float:
     """
     Compute the F1 score for how many trees matched.
@@ -205,27 +155,8 @@ def obj_mee_matching(
     matched_field_tree_indices, matched_drone_tree_indices = match_trees_singlestratum(
         field_trees=shifted_field_trees_cropped,
         drone_trees=drone_trees_cropped,
-        field_bounds_for_vis=obs_bounds,
-        vis=vis,
-        vis_file=vis_file,
+        height_col=height_column,
     )
-
-    # Save out file of matches, represented as lines connecting the two trees
-    if matches_file is not None:
-        matched_field_trees = shifted_field_trees_cropped[matched_field_tree_indices]
-        matched_drone_trees = drone_trees_cropped[matched_drone_tree_indices]
-        # One line per match, from the field tree (first) to the drone tree (second)
-        match_lines = [
-            shapely.LineString([field_pt, drone_pt])
-            for field_pt, drone_pt in zip(
-                matched_field_trees.geometry, matched_drone_trees.geometry
-            )
-        ]
-        matches_gdf = gpd.GeoDataFrame(
-            geometry=match_lines, crs=shifted_field_trees_cropped.crs
-        )
-        matches_file.parent.mkdir(exist_ok=True, parents=True)
-        matches_gdf.to_file(matches_file)
 
     # From the tree inds, we get the number of matches. Now all that's left to do is compute which
     # fraction of those fall within the core area and how many remain
@@ -258,18 +189,15 @@ def obj_mee_matching(
     precision = n_drone_matched / n_core_drone if n_core_drone > 0 else 0
 
     # Compute the F1 score, setting to 0 if both precision and recall are 0
-    f1 = (
-        (2 * (precision * recall) / (precision + recall))
-        if (precision + recall) > 0
-        else 0
-    )
+    P_plus_R = precision + recall
+    F1 = (2 * (precision * recall) / (P_plus_R)) if (P_plus_R) > 0 else 0
 
     if return_all_metrics:
         # Extract the index column so the un-cropped trees can be matched
         return (
-            f1,
+            F1,
             {
-                "F1": f1,
+                "F1": F1,
                 "precision": precision,
                 "recall": recall,
                 "n_core_field": n_core_field,
@@ -281,4 +209,4 @@ def obj_mee_matching(
             matched_drone_tree_indices,
         )
 
-    return f1
+    return F1

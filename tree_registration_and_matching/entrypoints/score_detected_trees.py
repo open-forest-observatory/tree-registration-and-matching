@@ -134,9 +134,6 @@ def score_detected_trees(
         edge_buffer=edge_buffer,
         height_column=height_column,
         return_all_metrics=True,
-        vis=vis,
-        vis_file=vis_file,
-        matches_file=matches_file,
     )
 
     # TODO save out the file of matches
