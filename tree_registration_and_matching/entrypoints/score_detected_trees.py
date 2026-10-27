@@ -7,7 +7,10 @@ import geopandas as gpd
 import pandas as pd
 
 from tree_registration_and_matching.eval import obj_mee_matching
-from tree_registration_and_matching.vis import vis_tree_matches
+from tree_registration_and_matching.vis import (
+    vis_tree_matches,
+    vis_attribute_comparison,
+)
 from tree_registration_and_matching.utils import ensure_projected_CRS
 
 DEFAULT_MIN_HEIGHT = 10.0
@@ -121,7 +124,6 @@ def score_detected_trees(
         f"Scoring {len(drone_trees)} drone trees against {len(field_trees)} field trees"
     )
 
-    # TODO return the matching IDs
     (
         _,
         metrics,
@@ -148,7 +150,16 @@ def score_detected_trees(
         matches_savefile=matches_file,
     )
 
-    # TODO save out the file of matches
+    vis_attribute_comparison(
+        field_trees=field_trees,
+        drone_trees=drone_trees,
+        matched_field_trees_indices=matched_field_tree_indices,
+        matched_drone_trees_indices=matched_drone_tree_indices,
+        field_trees_attribute="height",
+        drone_trees_attribute="height",
+        categorical=True,
+        vis=True,
+    )
 
     logging.info(f"Metrics: {metrics}")
 
