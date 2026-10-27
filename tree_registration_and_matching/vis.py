@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 import rasterio as rio
 from rasterio.plot import show
 import matplotlib.collections as mc
-from sklearn.metrics import ConfusionMatrixDisplay
+from sklearn.metrics import ConfusionMatrixDisplay, classification_report, r2_score
+from scipy.stats import pearsonr, spearmanr
 
 from tree_registration_and_matching.utils import ensure_projected_CRS
 
@@ -224,50 +225,3 @@ def vis_tree_matches(
         )
         matches_savefile.parent.mkdir(exist_ok=True, parents=True)
         match_lines_gdf.to_file(matches_savefile)
-
-
-def vis_attribute_comparison(
-    field_trees: gpd.GeoDataFrame,
-    drone_trees: gpd.GeoDataFrame,
-    matched_field_trees_indices: np.ndarray,
-    matched_drone_trees_indices: np.ndarray,
-    field_trees_attribute: str,
-    drone_trees_attribute: str,
-    categorical: bool,
-    vis: bool = False,
-    savefile: Path = None,
-):
-    field_values_to_compare = field_trees.loc[
-        matched_field_trees_indices, field_trees_attribute
-    ]
-    drone_values_to_compare = drone_trees.loc[
-        matched_drone_trees_indices, drone_trees_attribute
-    ]
-
-    if categorical:
-        ConfusionMatrixDisplay.from_predictions(
-            field_values_to_compare.to_list(), drone_values_to_compare.to_list()
-        )
-    else:
-        _, ax = plt.subplots()
-        ax.scatter(field_values_to_compare, drone_values_to_compare)
-        # Plot 1-1 line
-        lims = [
-            np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
-            np.max([ax.get_xlim(), ax.get_ylim()]),  # max of both axes
-        ]
-        # now plot both limits against eachother
-        ax.plot(lims, lims, c="r", zorder=0, label="1:1 line")
-
-        plt.xlabel("Field-derived values")
-        plt.ylabel("Drone-derived values")
-        plt.legend()
-
-    if vis:
-        plt.show()
-
-    if savefile:
-        savefile.parent.mkdir(exist_ok=True, parents=True)
-        plt.savefig(savefile)
-
-    plt.close()

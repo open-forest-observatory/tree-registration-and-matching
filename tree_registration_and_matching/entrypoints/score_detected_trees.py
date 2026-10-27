@@ -5,12 +5,13 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
+import numpy as np
 
-from tree_registration_and_matching.eval import obj_mee_matching
-from tree_registration_and_matching.vis import (
-    vis_tree_matches,
-    vis_attribute_comparison,
+from tree_registration_and_matching.eval import (
+    obj_mee_matching,
+    compare_field_drone_attributes,
 )
+from tree_registration_and_matching.vis import vis_tree_matches
 from tree_registration_and_matching.utils import ensure_projected_CRS
 
 DEFAULT_MIN_HEIGHT = 10.0
@@ -81,6 +82,11 @@ def score_detected_trees(
     vis: bool = False,
     vis_file: Path = None,
     matches_file: Path = None,
+    field_attribute_to_score: str = None,
+    drone_attribute_to_score: str = None,
+    categorical_scoring_attribute: bool | None = None,
+    scoring_metrics_savefile: Path | None = None,
+    vis_attribute_scoring: bool = False,
 ) -> dict:
     """Compute the F1 score for how many field trees were matched by drone-detected trees.
     Adapted from: https://github.com/open-forest-observatory/ofo-r/blob/3e3d138ffd99539affb7158979d06fc535bc1066/R/tree-map-alignment.R#L138
@@ -98,7 +104,14 @@ def score_detected_trees(
         matches_file (Path, optional): Save out a geofile of lines representing the matches between field and drone trees. Defaults to None.
 
     Returns:
-        dict: F1, precision, recall, and counts for drone/field core/matched trees
+        dict:
+            F1, precision, recall, and counts for drone/field core/matched trees
+        dict (optional):
+            The metrics for attribute prediction quality, which are only computed if
+            field_attribute_to_score, drone_attribute_to_score, and categorical_scoring_attribute
+            are provided. In the case of continious data, the metric keys are "R2", "pearson_r", and
+            "spearman_r". For categorical data, the metrics are the outputs of
+            sklearn.metrics.classification_report.
     """
     # Read the files
     field_trees = gpd.read_file(field_trees_file)
@@ -150,18 +163,7 @@ def score_detected_trees(
         matches_savefile=matches_file,
     )
 
-    vis_attribute_comparison(
-        field_trees=field_trees,
-        drone_trees=drone_trees,
-        matched_field_trees_indices=matched_field_tree_indices,
-        matched_drone_trees_indices=matched_drone_tree_indices,
-        field_trees_attribute="height",
-        drone_trees_attribute="height",
-        categorical=True,
-        vis=True,
-    )
-
-    logging.info(f"Metrics: {metrics}")
+    logging.info(f"Detection metrics: {metrics}")
 
     if output_file is not None:
         output_file = Path(output_file)
@@ -169,7 +171,41 @@ def score_detected_trees(
         with open(output_file, "w") as f:
             json.dump(metrics, f, indent=2)
 
-    return metrics
+    # Determine whether attribute prediction quality should be scored
+    if (
+        (f_nnone := field_attribute_to_score is not None)
+        or (d_nnone := drone_attribute_to_score is not None)
+        or (c_nnone := categorical_scoring_attribute is not None)
+    ):
+        if np.any(np.logical_not((f_nnone, d_nnone, c_nnone))):
+            raise ValueError(
+                "The field attribute to score, drone attribute to score, and categorical should all "
+                + "be set but instead the following were provided: "
+                + f"{(field_attribute_to_score, drone_attribute_to_score, categorical_scoring_attribute)}"
+            )
+
+        attribute_metrics = compare_field_drone_attributes(
+            field_trees=field_trees,
+            drone_trees=drone_trees,
+            matched_field_trees_indices=matched_field_tree_indices,
+            matched_drone_trees_indices=matched_drone_tree_indices,
+            field_trees_attribute=field_attribute_to_score,
+            drone_trees_attribute=drone_attribute_to_score,
+            categorical=categorical_scoring_attribute,
+            vis=vis_attribute_scoring,
+        )
+
+        logging.info(
+            f"Attribute metrics for field:{'height'} vs. drone:{'height'}: {attribute_metrics}"
+        )
+        if scoring_metrics_savefile is not None:
+            scoring_metrics_savefile.parent.mkdir(exist_ok=True, parents=True)
+            with open(scoring_metrics_savefile, "w") as outfile:
+                json.dump(attribute_metrics, scoring_metrics_savefile)
+
+        return metrics, attribute_metrics
+    else:
+        return metrics
 
 
 def parse_args():

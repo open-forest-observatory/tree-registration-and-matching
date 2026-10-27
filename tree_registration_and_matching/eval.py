@@ -4,6 +4,9 @@ from typing import Tuple
 import geopandas as gpd
 import numpy as np
 import shapely
+from sklearn.metrics import ConfusionMatrixDisplay, classification_report, r2_score
+from scipy.stats import pearsonr, spearmanr
+import matplotlib.pyplot as plt
 
 from tree_registration_and_matching.utils import cdist
 
@@ -208,3 +211,68 @@ def obj_mee_matching(
         )
 
     return F1
+
+
+def compare_field_drone_attributes(
+    field_trees: gpd.GeoDataFrame,
+    drone_trees: gpd.GeoDataFrame,
+    matched_field_trees_indices: np.ndarray,
+    matched_drone_trees_indices: np.ndarray,
+    field_trees_attribute: str,
+    drone_trees_attribute: str,
+    categorical: bool,
+    vis: bool = False,
+    vis_savefile: Path = None,
+) -> dict:
+    field_values_to_compare = field_trees.loc[
+        matched_field_trees_indices, field_trees_attribute
+    ]
+    drone_values_to_compare = drone_trees.loc[
+        matched_drone_trees_indices, drone_trees_attribute
+    ]
+
+    if categorical:
+        field_values_to_compare = field_values_to_compare.to_list()
+        drone_values_to_compare = drone_values_to_compare.to_list()
+
+        ConfusionMatrixDisplay.from_predictions(
+            field_values_to_compare, drone_values_to_compare
+        )
+        metrics = classification_report(
+            field_values_to_compare, drone_values_to_compare, output_dict=True
+        )
+    else:
+        metrics = {
+            "R2": r2_score(field_values_to_compare, drone_values_to_compare),
+            "pearson_r": float(
+                pearsonr(field_values_to_compare, drone_values_to_compare).statistic
+            ),
+            "spearman_r": float(
+                spearmanr(field_values_to_compare, drone_values_to_compare).statistic
+            ),
+        }
+
+        _, ax = plt.subplots()
+        ax.scatter(field_values_to_compare, drone_values_to_compare)
+        # Plot 1-1 line
+        lims = [
+            np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
+            np.max([ax.get_xlim(), ax.get_ylim()]),  # max of both axes
+        ]
+        # now plot both limits against eachother
+        ax.plot(lims, lims, c="r", zorder=0, label="1:1 line")
+
+        plt.xlabel("Field-derived values")
+        plt.ylabel("Drone-derived values")
+        plt.legend()
+
+    if vis:
+        plt.show()
+
+    if vis_savefile:
+        vis_savefile.parent.mkdir(exist_ok=True, parents=True)
+        plt.savefig(vis_savefile)
+
+    plt.close()
+
+    return metrics
