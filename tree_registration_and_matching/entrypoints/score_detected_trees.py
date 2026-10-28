@@ -188,11 +188,13 @@ def score_detected_trees(
         or (drone_attribute_to_score is not None)
         or (categorical_scoring_attribute is not None)
     ):
-        f_nnone = field_attribute_to_score is not None
-        d_nnone = drone_attribute_to_score is not None
-        c_nnone = categorical_scoring_attribute is not None
-
-        if np.any(np.logical_not((f_nnone, d_nnone, c_nnone))):
+        if np.any(
+            (
+                field_attribute_to_score is None,
+                drone_attribute_to_score is None,
+                categorical_scoring_attribute is None,
+            )
+        ):
             raise ValueError(
                 "The field attribute to score, drone attribute to score, and categorical should all "
                 + "be set but instead the following were provided: "
