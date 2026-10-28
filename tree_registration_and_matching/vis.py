@@ -2,9 +2,16 @@ from collections import OrderedDict
 from pathlib import Path
 
 import geopandas as gpd
+import matplotlib.collections as mc
 import matplotlib.pyplot as plt
+import numpy as np
 import rasterio as rio
+import shapely
 from rasterio.plot import show
+from scipy.stats import pearsonr, spearmanr
+from sklearn.metrics import ConfusionMatrixDisplay, classification_report, r2_score
+
+from tree_registration_and_matching.utils import ensure_projected_CRS
 
 
 def plot_trees_on_raster(
@@ -127,3 +134,96 @@ def plot_trees_on_raster(
     if opened_raster:
         raster.close()
     return ax
+
+
+def vis_tree_matches(
+    field_trees: gpd.GeoDataFrame,
+    drone_trees: gpd.GeoDataFrame,
+    matched_field_trees_indices: np.ndarray,
+    matched_drone_trees_indices: np.ndarray,
+    field_plot_bounds: gpd.GeoDataFrame = None,
+    points_scale_factor: float = 0.4,
+    height_col: str = "height",
+    vis: bool = False,
+    vis_file: Path | None = None,
+    matches_savefile: Path | None = None,
+):
+    """Visualize matches between field and drone trees
+
+    Args:
+        field_trees (gpd.GeoDataFrame): all field trees
+        drone_trees (gpd.GeoDataFrame): all drone trees
+        matched_field_trees_indices (np.ndarray): the indices (index column values) of the field trees that matched
+        matched_drone_trees_indices (np.ndarray): the indices (index column values) of the drone trees that matched. In the corresponding order as the field trees.
+        field_plot_bounds (gpd.GeoDataFrame, optional): The extent of the area that was surveyed. Defaults to None.
+        points_scale_factor (float, optional): Scalar multiple applied to the tree height before plotting. Defaults to 0.4.
+        height_col (str, optional): What column to pull height information from. Defaults to "height".
+        vis (bool, optional): Should the results be shown to the screen. Defaults to False.
+        vis_file (Path | None, optional): Should the results be written to this file. Defaults to None.
+        matches_savefile (Path | None, optional): Should the lines visualizing the matches be written to this file. Defaults to None.
+    """
+    # Ensure all products are in the same projected CRS
+    field_trees = ensure_projected_CRS(field_trees)
+    drone_trees = drone_trees.to_crs(field_trees.crs)
+    if field_plot_bounds is not None:
+        field_plot_bounds = field_plot_bounds.to_crs(field_trees.crs)
+
+    # Visualize trees form both sets
+    _, ax = plt.subplots()
+    field_trees.plot(
+        markersize=field_trees[height_col] * points_scale_factor,
+        c="#57d9d0",
+        label="ground reference trees",
+        ax=ax,
+    )
+    drone_trees.plot(
+        markersize=drone_trees[height_col] * points_scale_factor,
+        c="#b7484b",
+        label="drone trees",
+        ax=ax,
+    )
+
+    # Visualize match lines
+    ordered_matched_field_tree_points = shapely.get_coordinates(
+        field_trees.loc[matched_field_trees_indices].geometry
+    )
+    ordered_matched_drone_tree_points = shapely.get_coordinates(
+        drone_trees.loc[matched_drone_trees_indices].geometry
+    )
+    match_lines = [
+        [tuple(x), tuple(y)]
+        for x, y in zip(
+            ordered_matched_field_tree_points, ordered_matched_drone_tree_points
+        )
+    ]
+
+    lc = mc.LineCollection(match_lines, colors="#e35eac", linewidths=2, label="matches")
+    ax.add_collection(lc)
+
+    # Visualize field plot bounds
+    if field_plot_bounds is not None:
+        field_plot_bounds.boundary.plot(ax=ax, color="0.5", label="Plot bounds")
+
+    ax.set_aspect("equal")
+    ax.legend()
+
+    # Plot if requested
+    if vis:
+        plt.show()
+
+    # Write to file if requested
+    if vis_file is not None:
+        vis_file.parent.mkdir(parents=True, exist_ok=True)
+
+        plt.tight_layout()
+        plt.savefig(vis_file)
+    plt.close("all")
+
+    # Save out file of matches if requested. These are represented as lines connecting the matched
+    # trees.
+    if matches_savefile is not None:
+        match_lines_gdf = gpd.GeoDataFrame(
+            geometry=[shapely.LineString(ml) for ml in match_lines], crs=field_trees.crs
+        )
+        matches_savefile.parent.mkdir(exist_ok=True, parents=True)
+        match_lines_gdf.to_file(matches_savefile)

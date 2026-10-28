@@ -14,7 +14,8 @@ dependencies = [
     "ipykernel (>=7.1.0,<8.0.0)",
     "scipy (==1.15)",
     "rasterio (>=1.5.0,<2.0.0)",
-    "scikit-image (>=0.26.0,<0.27.0)"
+    "scikit-image (>=0.26.0,<0.27.0)",
+    "scikit-learn (>=1.9.1,<2.0.0)"
 ]
 
 
