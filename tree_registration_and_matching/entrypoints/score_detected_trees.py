@@ -249,7 +249,7 @@ def score_detected_trees(
         if scoring_metrics_savefile is not None:
             scoring_metrics_savefile.parent.mkdir(exist_ok=True, parents=True)
             with open(scoring_metrics_savefile, "w") as outfile:
-                json.dump(attribute_prediction_metrics, outfile)
+                json.dump(attribute_prediction_metrics, outfile, indent=4)
 
         return detection_metrics, attribute_prediction_metrics
     else:
