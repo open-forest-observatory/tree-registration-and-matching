@@ -88,6 +88,7 @@ def score_detected_trees(
     scoring_metrics_savefile: Path | None = None,
     vis_attribute_scoring: bool = False,
     vis_attribute_scoring_savefile: Path | None = None,
+    predicted_attribute_savefile: Path | None = None,
 ) -> dict:
     """Compute the F1 score for how many field trees were matched by drone-detected trees.
     Adapted from: https://github.com/open-forest-observatory/ofo-r/blob/3e3d138ffd99539affb7158979d06fc535bc1066/R/tree-map-alignment.R#L138
@@ -109,6 +110,7 @@ def score_detected_trees(
         scoring_metrics_savefile (Path | None, optional): Path to save the scoring metrics to in .json format. Defaults to None.
         vis_attribute_scoring (bool, optional): Should the scoring results be visualized to the screen. Defaults to False.
         vis_attribute_scoring_savefile (Path | None, optional): Path to save the prediction scoring visualization to. Defaults to None.
+        predicted_attribute_savefile (Path, optional) Path to save a .csv file with one row for every field tree and the drone-predicted attribute if present in a matched tree. Defaults to None.
 
     Returns:
         dict:
@@ -146,7 +148,7 @@ def score_detected_trees(
 
     (
         _,
-        metrics,
+        detection_metrics,
         matched_field_tree_indices,
         matched_drone_tree_indices,
     ) = obj_mee_matching(
@@ -159,6 +161,16 @@ def score_detected_trees(
         return_all_metrics=True,
     )
 
+    logging.info(f"Detection metrics: {detection_metrics}")
+
+    if output_file is not None:
+        output_file = Path(output_file)
+        output_file.parent.mkdir(exist_ok=True, parents=True)
+        with open(output_file, "w") as f:
+            json.dump(detection_metrics, f, indent=2)
+
+    # Slight chance this is a no-op but it's fast so it's easier to just run than check if anything
+    # will be shown or visualized.
     vis_tree_matches(
         field_trees=field_trees,
         drone_trees=drone_trees,
@@ -170,20 +182,16 @@ def score_detected_trees(
         matches_savefile=matches_file,
     )
 
-    logging.info(f"Detection metrics: {metrics}")
-
-    if output_file is not None:
-        output_file = Path(output_file)
-        output_file.parent.mkdir(exist_ok=True, parents=True)
-        with open(output_file, "w") as f:
-            json.dump(metrics, f, indent=2)
-
     # Determine whether attribute prediction quality should be scored
     if (
-        (f_nnone := field_attribute_to_score is not None)
-        or (d_nnone := drone_attribute_to_score is not None)
-        or (c_nnone := categorical_scoring_attribute is not None)
+        (field_attribute_to_score is not None)
+        or (drone_attribute_to_score is not None)
+        or (categorical_scoring_attribute is not None)
     ):
+        f_nnone = field_attribute_to_score is not None
+        d_nnone = drone_attribute_to_score is not None
+        c_nnone = categorical_scoring_attribute is not None
+
         if np.any(np.logical_not((f_nnone, d_nnone, c_nnone))):
             raise ValueError(
                 "The field attribute to score, drone attribute to score, and categorical should all "
@@ -191,7 +199,7 @@ def score_detected_trees(
                 + f"{(field_attribute_to_score, drone_attribute_to_score, categorical_scoring_attribute)}"
             )
 
-        attribute_metrics = compare_field_drone_attributes(
+        attribute_prediction_metrics = compare_field_drone_attributes(
             field_trees=field_trees,
             drone_trees=drone_trees,
             matched_field_trees_indices=matched_field_tree_indices,
@@ -203,17 +211,47 @@ def score_detected_trees(
             vis_savefile=vis_attribute_scoring_savefile,
         )
 
+        # Whether to save out a file containing a row for every field tree, with drone predictions
+        # for the corresponding class where available.
+        if predicted_attribute_savefile is not None:
+            # Select the field attribute, which should be included for every row
+            attributes_to_save = field_trees[[field_attribute_to_score]].copy()
+            # Append _field to the field data
+            attributes_to_save.rename(
+                columns={field_attribute_to_score: field_attribute_to_score + "_field"},
+                inplace=True,
+            )
+            # Add the drone values to the corresponding rows as a new column. Unmatched field trees
+            # get NaN. The drone values are ordered like the matched field trees, so assign the raw
+            # values to avoid pandas aligning on the (different) drone tree index labels.
+            drone_column = drone_attribute_to_score + "_drone"
+            attributes_to_save[drone_column] = np.nan
+
+            # Extract the values from the drone dataset
+            matched_drone_attributes = drone_trees.loc[
+                matched_drone_tree_indices, drone_attribute_to_score
+            ].to_numpy()
+
+            # Enter them into the corresponding rows
+            attributes_to_save.loc[matched_field_tree_indices, drone_column] = (
+                matched_drone_attributes
+            )
+
+            # Save out
+            predicted_attribute_savefile.parent.mkdir(exist_ok=True, parents=True)
+            attributes_to_save.to_csv(predicted_attribute_savefile)
+
         logging.info(
-            f"Attribute metrics for field:{'height'} vs. drone:{'height'}: {attribute_metrics}"
+            f"Prediction metrics for field:{field_attribute_to_score} vs. drone:{drone_attribute_to_score}: {attribute_prediction_metrics}"
         )
         if scoring_metrics_savefile is not None:
             scoring_metrics_savefile.parent.mkdir(exist_ok=True, parents=True)
             with open(scoring_metrics_savefile, "w") as outfile:
-                json.dump(attribute_metrics, scoring_metrics_savefile)
+                json.dump(attribute_prediction_metrics, outfile)
 
-        return metrics, attribute_metrics
+        return detection_metrics, attribute_prediction_metrics
     else:
-        return metrics
+        return detection_metrics
 
 
 def parse_args():
@@ -293,14 +331,14 @@ def parse_args():
     attribute_type_group = parser.add_mutually_exclusive_group()
     attribute_type_group.add_argument(
         "--categorical-scoring-attribute",
-        help="Is the attribute categorical?",
+        help="Is the attribute to score categorical?",
         action="store_true",
         dest="categorical_scoring_attribute",
         default=None,
     )
     attribute_type_group.add_argument(
         "--continuous-scoring-attribute",
-        help="Is the attribute continuous? Opposite of --categorical-scoring-attribute.",
+        help="Is the attribute to score continuous? Opposite of --categorical-scoring-attribute.",
         action="store_false",
         dest="categorical_scoring_attribute",
         default=None,
@@ -319,6 +357,11 @@ def parse_args():
         "--vis-attribute-scoring-savefile",
         type=Path,
         help="Path to save the prediction scoring visualization to.",
+    )
+    parser.add_argument(
+        "--predicted-attribute-savefile",
+        type=Path,
+        help="Path to save a .csv file with one row for every field tree and the drone-predicted attribute if present in a matched tree.",
     )
     return parser.parse_args()
 

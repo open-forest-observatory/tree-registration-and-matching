@@ -262,8 +262,8 @@ def compare_field_drone_attributes(
         # now plot both limits against eachother
         ax.plot(lims, lims, c="r", zorder=0, label="1:1 line")
 
-        plt.xlabel("Field-derived values")
-        plt.ylabel("Drone-derived values")
+        plt.xlabel(f"Field-derived values: {field_trees_attribute}")
+        plt.ylabel(f"Drone-derived values: {drone_trees_attribute}")
         plt.legend()
 
     if vis:
