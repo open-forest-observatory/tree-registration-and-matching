@@ -4,15 +4,15 @@ import logging
 from pathlib import Path
 
 import geopandas as gpd
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 from tree_registration_and_matching.eval import (
-    obj_mee_matching,
     compare_field_drone_attributes,
+    obj_mee_matching,
 )
-from tree_registration_and_matching.vis import vis_tree_matches
 from tree_registration_and_matching.utils import ensure_projected_CRS
+from tree_registration_and_matching.vis import vis_tree_matches
 
 DEFAULT_MIN_HEIGHT = 10.0
 DEFAULT_EDGE_BUFFER = 5.0

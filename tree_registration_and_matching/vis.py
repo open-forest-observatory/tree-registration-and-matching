@@ -1,15 +1,15 @@
 from collections import OrderedDict
 from pathlib import Path
 
-import numpy as np
-import shapely
 import geopandas as gpd
-import matplotlib.pyplot as plt
-import rasterio as rio
-from rasterio.plot import show
 import matplotlib.collections as mc
-from sklearn.metrics import ConfusionMatrixDisplay, classification_report, r2_score
+import matplotlib.pyplot as plt
+import numpy as np
+import rasterio as rio
+import shapely
+from rasterio.plot import show
 from scipy.stats import pearsonr, spearmanr
+from sklearn.metrics import ConfusionMatrixDisplay, classification_report, r2_score
 
 from tree_registration_and_matching.utils import ensure_projected_CRS
 
