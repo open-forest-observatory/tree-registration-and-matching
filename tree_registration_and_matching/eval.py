@@ -2,11 +2,11 @@ from pathlib import Path
 from typing import Tuple
 
 import geopandas as gpd
+import matplotlib.pyplot as plt
 import numpy as np
 import shapely
-from sklearn.metrics import ConfusionMatrixDisplay, classification_report, r2_score
 from scipy.stats import pearsonr, spearmanr
-import matplotlib.pyplot as plt
+from sklearn.metrics import ConfusionMatrixDisplay, classification_report, r2_score
 
 from tree_registration_and_matching.utils import cdist
 
