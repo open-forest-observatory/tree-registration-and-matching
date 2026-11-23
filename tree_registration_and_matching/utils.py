@@ -1,5 +1,8 @@
+from pathlib import Path
+
 import geopandas as gpd
 import numpy as np
+import pandas as pd
 import pyproj
 import shapely
 
@@ -61,6 +64,46 @@ def cdist(x, y):
     pairwise_distances = np.sqrt(np.sum((x_reshaped - y_reshaped) ** 2, axis=2))
 
     return pairwise_distances
+
+
+def translate_by_shift(
+    shift_file: Path | str, geodata: gpd.GeoDataFrame
+) -> gpd.GeoDataFrame:
+    """Shift geospatial by the amount specified in a shift file
+
+    Args:
+        shift_file (Path | str):
+            Path to a shift file (.csv, one row) produced by the registration algorithm, containing
+            at least estimated_shift_x, estimated_shift_y, shift_CRS columns.
+        geodata (gpd.GeoDataFrame): data to shift
+
+    Returns:
+        gpd.GeoDataFrame: The shifted input data
+    """
+    original_CRS = geodata.crs
+
+    shift = pd.read_csv(shift_file)
+
+    if len(shift) != 1:
+        raise ValueError(
+            f"The shift file should contain 1 line but instead contains {len(shift)}"
+        )
+    # Extract the shift definition
+    estimated_shift_x = shift.estimated_shift_x.iloc[0]
+    estimated_shift_y = shift.estimated_shift_y.iloc[0]
+    shift_crs = shift.shift_CRS.iloc[0]
+
+    # Copy and convert to the CRS which is required for translation
+    # The next step is the one which would edit it
+    geodata = geodata.copy().to_crs(shift_crs)
+
+    # Apply the translation
+    geodata.geometry = geodata.geometry.translate(
+        xoff=estimated_shift_x, yoff=estimated_shift_y
+    )
+
+    # Convert back to the original CRS
+    return geodata.to_crs(original_CRS)
 
 
 def ensure_height_is_present(

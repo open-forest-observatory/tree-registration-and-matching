@@ -11,19 +11,25 @@ from rasterio.plot import show
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import ConfusionMatrixDisplay, classification_report, r2_score
 
-from tree_registration_and_matching.utils import ensure_projected_CRS
+from tree_registration_and_matching.utils import (
+    ensure_projected_CRS,
+    translate_by_shift,
+)
 
 
 def plot_trees_on_raster(
     raster: rio.DatasetReader | Path | str,
-    tree_points: gpd.GeoDataFrame,
-    plot_bounds: gpd.GeoDataFrame = None,
+    tree_points: gpd.GeoDataFrame | Path | str,
+    plot_bounds: gpd.GeoDataFrame | Path | str | None = None,
+    shift_file: str | Path | None = None,
     height_column: str = "height",
     height_plotting_scale: float = 0.25,
     point_color: str = "red",
     title: str = None,
     ax: plt.Axes = None,
     add_colorbar: bool = True,
+    visualization_output_file: str | Path | None = None,
+    vis: bool = False,
 ):
     """Visualize tree points overlaid on a CHM or orthomosaic raster.
 
@@ -35,6 +41,8 @@ def plot_trees_on_raster(
         plot_bounds (gpd.GeoDataFrame, optional):
             Boundary of the field plot to outline. If provided, the view is also cropped to its
             extent. Defaults to None.
+        shift_file (str | Path, optional):
+            A path to a file containing the shift to apply to the field data. Defaults to None.
         height_column (str, optional): Column in `tree_points` used to scale point size, so taller
             trees are shown as larger points. Defaults to "height".
         height_plotting_scale (float, optional):
@@ -46,14 +54,25 @@ def plot_trees_on_raster(
             created. Defaults to None.
         add_colorbar (bool):
             Whether to add a colorbar to the plot. Defaults to True.
+        visualization_output_file (str | Path, optional):
+            If provided, save out the plot to this file, creating parent directories as needed.
+        vis (bool, optional):
+            Plot in a window. Defaults to False
 
     Returns:
         plt.Axes: The axes the data was plotted on.
     """
+    # Load data if file paths are provided
     opened_raster = False
     if not isinstance(raster, rio.DatasetReader):
         raster = rio.open(raster)
         opened_raster = True
+
+    if not isinstance(tree_points, gpd.GeoDataFrame):
+        tree_points = gpd.read_file(tree_points)
+
+    if (plot_bounds is not None) and (not isinstance(plot_bounds, gpd.GeoDataFrame)):
+        plot_bounds = gpd.read_file(plot_bounds)
 
     is_CHM = raster.count == 1
 
@@ -65,6 +84,12 @@ def plot_trees_on_raster(
     if ax is None:
         _, ax = plt.subplots()
     f = ax.get_figure()
+
+    # Shift data if needed
+    if shift_file is not None:
+        tree_points = translate_by_shift(shift_file=shift_file, geodata=tree_points)
+        if plot_bounds is not None:
+            plot_bounds = translate_by_shift(shift_file=shift_file, geodata=plot_bounds)
 
     # If plot bounds are provided, compute a raster window covering just that
     # extent so only the relevant portion of the (potentially very large) raster
@@ -133,6 +158,14 @@ def plot_trees_on_raster(
 
     if opened_raster:
         raster.close()
+
+    if visualization_output_file is not None:
+        Path(visualization_output_file).parent.mkdir(exist_ok=True, parents=True)
+        plt.savefig(visualization_output_file)
+
+    if vis:
+        plt.show()
+
     return ax
 
 
