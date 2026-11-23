@@ -19,8 +19,8 @@ from tree_registration_and_matching.utils import (
 
 def plot_trees_on_raster(
     raster: rio.DatasetReader | Path | str,
-    tree_points: gpd.GeoDataFrame,
-    plot_bounds: gpd.GeoDataFrame = None,
+    tree_points: gpd.GeoDataFrame | Path | str,
+    plot_bounds: gpd.GeoDataFrame | Path | str | None = None,
     shift_file: str | Path | None = None,
     height_column: str = "height",
     height_plotting_scale: float = 0.25,
@@ -28,7 +28,8 @@ def plot_trees_on_raster(
     title: str = None,
     ax: plt.Axes = None,
     add_colorbar: bool = True,
-    savefile: str | Path | None = None,
+    visualization_output_file: str | Path | None = None,
+    vis: bool = False,
 ):
     """Visualize tree points overlaid on a CHM or orthomosaic raster.
 
@@ -53,17 +54,25 @@ def plot_trees_on_raster(
             created. Defaults to None.
         add_colorbar (bool):
             Whether to add a colorbar to the plot. Defaults to True.
-        savefile (str | Path, optional):
+        visualization_output_file (str | Path, optional):
             If provided, save out the plot to this file, creating parent directories as needed.
-
+        vis (bool, optional):
+            Plot in a window. Defaults to False
 
     Returns:
         plt.Axes: The axes the data was plotted on.
     """
+    # Load data if file paths are provided
     opened_raster = False
     if not isinstance(raster, rio.DatasetReader):
         raster = rio.open(raster)
         opened_raster = True
+
+    if not isinstance(tree_points, gpd.GeoDataFrame):
+        tree_points = gpd.read_file(tree_points)
+
+    if (plot_bounds is not None) and (not isinstance(plot_bounds, gpd.GeoDataFrame)):
+        plot_bounds = gpd.read_file(plot_bounds)
 
     is_CHM = raster.count == 1
 
@@ -150,9 +159,13 @@ def plot_trees_on_raster(
     if opened_raster:
         raster.close()
 
-    if savefile is not None:
-        Path(savefile).parent.mkdir(exist_ok=True, parents=True)
-        plt.savefig(savefile)
+    if visualization_output_file is not None:
+        Path(visualization_output_file).parent.mkdir(exist_ok=True, parents=True)
+        plt.savefig(visualization_output_file)
+
+    if vis:
+        plt.show()
+
     return ax
 
 
