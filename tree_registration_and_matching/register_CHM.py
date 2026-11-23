@@ -198,6 +198,8 @@ def find_best_shift(
             'y_vals': numpy array of y offsets
         }
     """
+    if (n_trees := len(tree_points)) < 2:
+        raise ValueError(f"At least two trees are required but {n_trees} were provided")
 
     # Normalize ranges to arrays
     def _to_vals(r):
