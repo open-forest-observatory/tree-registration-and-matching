@@ -243,6 +243,7 @@ def parse_args():
     )
     parser.add_argument(
         "--min-tree-height",
+        type=float,
         help="Only use trees above this height for registration.",
         default=MIN_TREE_HEIGHT,
     )
